@@ -12,10 +12,6 @@ import (
 
 // Builder orchestrates the building of tool images.
 type Builder struct {
-	// GatewayVersion is the agent-operator-core release tag for the capability-gateway binary.
-	// If empty, defaults to "latest".
-	GatewayVersion string
-
 	// Output is where to write build output (default: os.Stdout)
 	Output io.Writer
 
@@ -24,14 +20,10 @@ type Builder struct {
 }
 
 // NewBuilder creates a new Builder.
-func NewBuilder(gatewayVersion string) *Builder {
-	if gatewayVersion == "" {
-		gatewayVersion = "latest"
-	}
+func NewBuilder() *Builder {
 	return &Builder{
-		GatewayVersion: gatewayVersion,
-		Output:         os.Stdout,
-		ErrorOutput:    os.Stderr,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
 	}
 }
 
@@ -72,7 +64,6 @@ func (b *Builder) Build(ctx context.Context, pkg *ToolPackage, opts BuildOptions
 
 	fmt.Fprintf(b.Output, "Building tool: %s v%s\n", pkg.Metadata.Name, pkg.Metadata.Version)
 	fmt.Fprintf(b.Output, "Install method: %s\n", pkg.InstallMethod())
-	fmt.Fprintf(b.Output, "Gateway version: %s\n", b.GatewayVersion)
 	fmt.Fprintf(b.Output, "Build context: %s\n", buildDir)
 
 	// Generate and write Dockerfile
@@ -95,12 +86,6 @@ func (b *Builder) Build(ctx context.Context, pkg *ToolPackage, opts BuildOptions
 		}
 		fmt.Fprintf(b.Output, "Embedded %d deny patterns\n", len(pkg.Deny))
 	}
-
-	// Set gateway version as build arg
-	if opts.BuildArgs == nil {
-		opts.BuildArgs = make(map[string]string)
-	}
-	opts.BuildArgs["GATEWAY_VERSION"] = b.GatewayVersion
 
 	// Run docker build
 	if err := b.runDockerBuild(ctx, buildDir, opts); err != nil {

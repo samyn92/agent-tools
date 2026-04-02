@@ -19,9 +19,6 @@ var (
 	buildNoCache  bool
 	buildPlatform string
 
-	// Gateway version flag
-	buildGatewayVersion string
-
 	// Inline build options
 	buildBinary          string
 	buildAPK             string
@@ -39,16 +36,17 @@ var toolBuildCmd = &cobra.Command{
 	Short: "Build a tool image",
 	Long: `Build a tool image from a manifest file or inline options.
 
+Tool images contain only the CLI binary, base utilities, and deny patterns.
+The capability-gateway binary is injected at runtime by the agent-operator
+via an init container — it is NOT baked into tool images.
+
 From manifest:
   agent-tools tool build -f tool.yaml -t ghcr.io/myorg/tool-gh:v1.0.0
   agent-tools tool build -f tool.yaml -t ghcr.io/myorg/tool-gh:v1.0.0 --push
 
 Inline build:
   agent-tools tool build --apk github-cli --binary gh -t myimage:latest
-  agent-tools tool build --pip awscli --binary aws -t myimage:latest
-
-Specify gateway version:
-  agent-tools tool build -f tool.yaml -t myimage:latest --gateway-version v0.0.1`,
+  agent-tools tool build --pip awscli --binary aws -t myimage:latest`,
 	RunE: runToolBuild,
 }
 
@@ -59,7 +57,6 @@ func init() {
 	toolBuildCmd.Flags().BoolVar(&buildPush, "push", false, "Push image after building")
 	toolBuildCmd.Flags().BoolVar(&buildNoCache, "no-cache", false, "Do not use cache when building")
 	toolBuildCmd.Flags().StringVar(&buildPlatform, "platform", "", "Set target platform (e.g., linux/amd64)")
-	toolBuildCmd.Flags().StringVar(&buildGatewayVersion, "gateway-version", "latest", "Agent Operator Core release tag for capability-gateway binary")
 
 	// Inline build options
 	toolBuildCmd.Flags().StringVar(&buildBinary, "binary", "", "CLI binary name (for inline builds)")
@@ -117,7 +114,7 @@ func runToolBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create builder
-	builder := toolpackage.NewBuilder(buildGatewayVersion)
+	builder := toolpackage.NewBuilder()
 
 	// Set up context with signal handling
 	ctx, cancel := context.WithCancel(context.Background())

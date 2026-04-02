@@ -52,15 +52,13 @@ jobs:
           go run ./cmd/cli tool build \
             -f catalog/${{ matrix.tool }}/tool.yaml \
             -t ${{ env.REGISTRY }}/${{ github.repository_owner }}/tool-${{ matrix.tool }}:${{ steps.version.outputs.version }} \
-            --gateway-version v${{ steps.version.outputs.version }} \
             --push
 
       - name: Tag as latest
         run: |
-          docker tag \
+          docker buildx imagetools create \
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/tool-${{ matrix.tool }}:${{ steps.version.outputs.version }} \
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/tool-${{ matrix.tool }}:latest
-          docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/tool-${{ matrix.tool }}:latest
+            --tag ${{ env.REGISTRY }}/${{ github.repository_owner }}/tool-${{ matrix.tool }}:latest
 
   cli-binary:
     runs-on: ubuntu-latest
