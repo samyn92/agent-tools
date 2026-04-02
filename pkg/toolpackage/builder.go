@@ -38,8 +38,9 @@ type BuildOptions struct {
 	// NoCache disables Docker build cache
 	NoCache bool
 
-	// Platform specifies the target platform (e.g., "linux/amd64")
-	Platform string
+	// Platforms specifies the target platforms (e.g., "linux/amd64,linux/arm64")
+	// If empty, defaults to the host platform.
+	Platforms string
 
 	// BuildArgs are additional Docker build arguments
 	BuildArgs map[string]string
@@ -94,27 +95,25 @@ func (b *Builder) Build(ctx context.Context, pkg *ToolPackage, opts BuildOptions
 
 	fmt.Fprintf(b.Output, "Successfully built %s\n", opts.Tag)
 
-	// Push if requested
-	if opts.Push {
-		if err := b.runDockerPush(ctx, opts.Tag); err != nil {
-			return fmt.Errorf("docker push: %w", err)
-		}
-		fmt.Fprintf(b.Output, "Successfully pushed %s\n", opts.Tag)
-	}
-
 	return nil
 }
 
-// runDockerBuild runs the docker build command.
+// runDockerBuild runs the docker buildx build command.
+// When Platforms is set or Push is true, it uses buildx to build multi-platform
+// images and push directly to the registry (images are not stored locally).
 func (b *Builder) runDockerBuild(ctx context.Context, buildDir string, opts BuildOptions) error {
-	args := []string{"build", "-t", opts.Tag}
+	args := []string{"buildx", "build", "-t", opts.Tag}
 
 	if opts.NoCache {
 		args = append(args, "--no-cache")
 	}
 
-	if opts.Platform != "" {
-		args = append(args, "--platform", opts.Platform)
+	if opts.Platforms != "" {
+		args = append(args, "--platform", opts.Platforms)
+	}
+
+	if opts.Push {
+		args = append(args, "--push")
 	}
 
 	for k, v := range opts.BuildArgs {
@@ -127,17 +126,6 @@ func (b *Builder) runDockerBuild(ctx context.Context, buildDir string, opts Buil
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Dir = buildDir
-	cmd.Stdout = b.Output
-	cmd.Stderr = b.ErrorOutput
-
-	return cmd.Run()
-}
-
-// runDockerPush runs the docker push command.
-func (b *Builder) runDockerPush(ctx context.Context, tag string) error {
-	fmt.Fprintf(b.Output, "Running: docker push %s\n", tag)
-
-	cmd := exec.CommandContext(ctx, "docker", "push", tag)
 	cmd.Stdout = b.Output
 	cmd.Stderr = b.ErrorOutput
 

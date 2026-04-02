@@ -38,6 +38,9 @@ FROM node:22-alpine
 FROM alpine:3.21
 {{end}}
 
+# TARGETARCH is provided automatically by Docker buildx (amd64, arm64, etc.)
+ARG TARGETARCH
+
 # Install base utilities
 RUN apk add --no-cache ca-certificates curl jq wget
 

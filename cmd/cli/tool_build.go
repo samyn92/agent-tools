@@ -13,11 +13,11 @@ import (
 
 var (
 	// Flags for tool build command
-	buildFile     string
-	buildTag      string
-	buildPush     bool
-	buildNoCache  bool
-	buildPlatform string
+	buildFile      string
+	buildTag       string
+	buildPush      bool
+	buildNoCache   bool
+	buildPlatforms string
 
 	// Inline build options
 	buildBinary          string
@@ -56,7 +56,7 @@ func init() {
 	toolBuildCmd.Flags().StringVarP(&buildTag, "tag", "t", "", "Image tag (required)")
 	toolBuildCmd.Flags().BoolVar(&buildPush, "push", false, "Push image after building")
 	toolBuildCmd.Flags().BoolVar(&buildNoCache, "no-cache", false, "Do not use cache when building")
-	toolBuildCmd.Flags().StringVar(&buildPlatform, "platform", "", "Set target platform (e.g., linux/amd64)")
+	toolBuildCmd.Flags().StringVar(&buildPlatforms, "platforms", "", "Set target platforms (e.g., linux/amd64,linux/arm64)")
 
 	// Inline build options
 	toolBuildCmd.Flags().StringVar(&buildBinary, "binary", "", "CLI binary name (for inline builds)")
@@ -130,10 +130,10 @@ func runToolBuild(cmd *cobra.Command, args []string) error {
 
 	// Run the build
 	opts := toolpackage.BuildOptions{
-		Tag:      buildTag,
-		Push:     buildPush,
-		NoCache:  buildNoCache,
-		Platform: buildPlatform,
+		Tag:       buildTag,
+		Push:      buildPush,
+		NoCache:   buildNoCache,
+		Platforms: buildPlatforms,
 	}
 
 	if err := builder.Build(ctx, pkg, opts); err != nil {

@@ -8,7 +8,7 @@ metadata:
 cli:
   binary: kubectl
   download:
-    url: https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
+    url: https://dl.k8s.io/release/v1.30.0/bin/linux/${TARGETARCH}/kubectl
     chmod: "755"
 
 # Embedded deny patterns - baked into image, CANNOT be overridden by Tool CRD

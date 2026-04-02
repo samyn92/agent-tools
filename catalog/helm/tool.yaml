@@ -8,9 +8,9 @@ metadata:
 cli:
   binary: helm
   download:
-    url: https://get.helm.sh/helm-v3.14.0-linux-amd64.tar.gz
+    url: https://get.helm.sh/helm-v3.14.0-linux-${TARGETARCH}.tar.gz
     extract: tar.gz
-    path: linux-amd64/helm
+    path: linux-${TARGETARCH}/helm
     chmod: "755"
 
 # Embedded deny patterns - baked into image, CANNOT be overridden
