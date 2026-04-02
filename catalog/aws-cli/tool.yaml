@@ -1,0 +1,74 @@
+apiVersion: tools.agents.io/v1
+kind: ToolPackage
+metadata:
+  name: aws-cli
+  version: "2.15.0"
+  description: AWS Command Line Interface for cloud operations
+
+cli:
+  binary: aws
+  pip: awscli
+
+# Embedded deny patterns - baked into image, CANNOT be overridden by Tool CRD
+deny:
+  # IAM operations (privilege escalation risk)
+  - "aws iam create-user *"
+  - "aws iam delete-user *"
+  - "aws iam create-role *"
+  - "aws iam delete-role *"
+  - "aws iam attach-*"
+  - "aws iam detach-*"
+  - "aws iam put-*"
+  - "aws iam create-access-key *"
+  - "aws iam delete-access-key *"
+  
+  # STS assume role (could escalate privileges)
+  - "aws sts assume-role *"
+  
+  # Organizations (account management)
+  - "aws organizations *"
+  
+  # Account management
+  - "aws account *"
+  
+  # SSO (credential management)
+  - "aws sso *"
+  - "aws sso-admin *"
+  
+  # Configure (credential management)
+  - "aws configure *"
+  
+  # Force delete without recovery
+  - "*--force*"
+  - "*--no-wait*"
+  
+  # KMS key deletion
+  - "aws kms schedule-key-deletion *"
+  - "aws kms delete-*"
+  
+  # Secrets Manager deletion
+  - "aws secretsmanager delete-secret *"
+  
+  # RDS deletion
+  - "aws rds delete-db-instance *--skip-final-snapshot*"
+  - "aws rds delete-db-cluster *--skip-final-snapshot*"
+  
+  # EC2 termination
+  - "aws ec2 terminate-instances *"
+  
+  # VPC deletion
+  - "aws ec2 delete-vpc *"
+
+env:
+  - name: AWS_ACCESS_KEY_ID
+    description: AWS access key ID
+    required: true
+  - name: AWS_SECRET_ACCESS_KEY
+    description: AWS secret access key
+    required: true
+  - name: AWS_DEFAULT_REGION
+    description: AWS default region
+    required: false
+  - name: AWS_SESSION_TOKEN
+    description: AWS session token (for temporary credentials)
+    required: false

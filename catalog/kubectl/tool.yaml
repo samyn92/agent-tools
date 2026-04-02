@@ -1,0 +1,86 @@
+apiVersion: tools.agents.io/v1
+kind: ToolPackage
+metadata:
+  name: kubectl
+  version: "1.30.0"
+  description: Kubernetes command-line tool for cluster operations
+
+cli:
+  binary: kubectl
+  download:
+    url: https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl
+    chmod: "755"
+
+# Embedded deny patterns - baked into image, CANNOT be overridden by Tool CRD
+deny:
+  # Cluster-wide destructive operations
+  - "kubectl delete namespace *"
+  - "kubectl delete ns *"
+  - "kubectl delete node *"
+  - "kubectl delete pv *"
+  - "kubectl delete clusterrole *"
+  - "kubectl delete clusterrolebinding *"
+  
+  # Force/grace period zero deletions
+  - "*--force*"
+  - "*--grace-period=0*"
+  
+  # Exec into system namespaces
+  - "kubectl exec * -n kube-system *"
+  - "kubectl exec * --namespace kube-system *"
+  - "kubectl exec * -n kube-public *"
+  
+  # Port forwarding (security risk)
+  - "kubectl port-forward *"
+  
+  # Proxy (security risk)
+  - "kubectl proxy *"
+  
+  # Config/auth management
+  - "kubectl config *"
+  
+  # Plugin management
+  - "kubectl plugin *"
+  
+  # Raw API access
+  - "kubectl get --raw *"
+  - "kubectl create --raw *"
+
+  # Self-modification of agent-operator CRDs
+  # Agents must never mutate their own definition. RBAC (ServiceAccount) is the
+  # primary enforcement; these patterns add visibility at the OpenCode permission layer.
+  - "kubectl edit agent *"
+  - "kubectl edit agents *"
+  - "kubectl edit skill *"
+  - "kubectl edit skills *"
+  - "kubectl edit capability *"
+  - "kubectl edit capabilities *"
+  - "kubectl edit channel *"
+  - "kubectl edit channels *"
+  - "kubectl edit workflow *"
+  - "kubectl edit workflows *"
+  - "kubectl edit workflowrun *"
+  - "kubectl edit workflowruns *"
+  - "kubectl patch agent *"
+  - "kubectl patch skill *"
+  - "kubectl patch capability *"
+  - "kubectl patch channel *"
+  - "kubectl patch workflow *"
+  - "kubectl patch workflowrun *"
+  - "kubectl delete agent *"
+  - "kubectl delete skill *"
+  - "kubectl delete capability *"
+  - "kubectl delete channel *"
+  - "kubectl delete workflow *"
+  - "kubectl delete workflowrun *"
+  - "kubectl apply agent *"
+  - "kubectl apply skill *"
+  - "kubectl apply capability *"
+  - "kubectl apply channel *"
+  - "kubectl apply workflow *"
+  - "kubectl apply workflowrun *"
+
+env:
+  - name: KUBECONFIG
+    description: Path to kubeconfig file (usually mounted as a volume)
+    required: false

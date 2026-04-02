@@ -1,0 +1,42 @@
+apiVersion: tools.agents.io/v1
+kind: ToolPackage
+metadata:
+  name: github-cli
+  version: "2.45.0"
+  description: GitHub CLI for PR and issue management
+
+cli:
+  binary: gh
+  apk: github-cli
+
+# Embedded deny patterns - baked into image, CANNOT be overridden by Tool CRD
+deny:
+  # Authentication - agents should not manage auth
+  - "gh auth *"
+  - "gh config *"
+  
+  # Destructive operations
+  - "gh repo delete *"
+  - "gh repo archive *"
+  
+  # Force flags
+  - "*--force*"
+  - "*-f *"
+  
+  # SSH key management
+  - "gh ssh-key *"
+  
+  # Token/secret management
+  - "gh secret *"
+  - "gh variable *"
+  
+  # Org-level operations
+  - "gh org *"
+
+env:
+  - name: GITHUB_TOKEN
+    description: GitHub personal access token with appropriate scopes
+    required: true
+  - name: GH_HOST
+    description: GitHub Enterprise hostname (optional, defaults to github.com)
+    required: false

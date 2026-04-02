@@ -1,0 +1,38 @@
+apiVersion: tools.agents.io/v1
+kind: ToolPackage
+metadata:
+  name: gitlab-cli
+  version: "1.46.0"
+  description: GitLab CLI for merge request and issue management
+
+cli:
+  binary: glab
+  apk: glab
+
+# Embedded deny patterns - baked into image, CANNOT be overridden by Tool CRD
+deny:
+  # Authentication - agents should not manage auth
+  - "glab auth *"
+  - "glab config *"
+
+  # Destructive operations
+  - "glab project delete *"
+  - "glab project archive *"
+
+  # Force flags
+  - "*--force*"
+  - "*-f *"
+
+  # SSH key management
+  - "glab ssh-key *"
+
+  # Token/secret management
+  - "glab variable *"
+
+env:
+  - name: GITLAB_TOKEN
+    description: GitLab personal access token with appropriate scopes
+    required: true
+  - name: GITLAB_HOST
+    description: GitLab instance hostname (optional, defaults to gitlab.com)
+    required: false
