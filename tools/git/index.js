@@ -11,6 +11,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -243,6 +244,64 @@ export const tools = [
       const args = ["clone", params.url];
       if (params.directory) args.push(params.directory);
       return textResult(await git(args, "/workspace"));
+    },
+  },
+
+  {
+    name: "git_clone_or_pull",
+    description:
+      "Clone a repository if it doesn't exist locally, or pull latest changes if it does. " +
+      "Use this instead of git_clone when the repo may already be present from a previous session.",
+    label: "Git Clone or Pull",
+    parameters: {
+      type: "object",
+      required: ["url"],
+      properties: {
+        url: { type: "string", description: "Repository URL to clone" },
+        directory: {
+          type: "string",
+          description:
+            "Target directory name (optional — derived from URL if omitted)",
+        },
+        branch: {
+          type: "string",
+          description: "Branch to checkout/pull (optional — uses default branch if omitted)",
+        },
+      },
+    },
+    execute: async (_id, params) => {
+      const workspace = process.env.WORKSPACE || "/workspace";
+
+      // Derive directory name from URL if not provided
+      // e.g. https://gitlab.com/samyn92/homecluster.git → homecluster
+      const dirName =
+        params.directory ||
+        params.url
+          .replace(/\.git$/, "")
+          .split("/")
+          .pop();
+      const targetPath = `${workspace}/${dirName}`;
+
+      // Check if the directory already exists and contains a git repo
+      if (existsSync(`${targetPath}/.git`)) {
+        // Repo exists — pull latest changes
+        const pullArgs = ["pull"];
+        if (params.branch) {
+          pullArgs.push("origin", params.branch);
+        }
+        const out = await git(pullArgs, targetPath);
+        return textResult(
+          `Repository already exists at ${targetPath}. Pulled latest changes.\n${out}`
+        );
+      }
+
+      // Repo does not exist — clone it
+      const cloneArgs = ["clone", params.url, targetPath];
+      if (params.branch) {
+        cloneArgs.splice(1, 0, "--branch", params.branch);
+      }
+      const out = await git(cloneArgs, workspace);
+      return textResult(`Cloned ${params.url} into ${targetPath}.\n${out}`);
     },
   },
 ];
