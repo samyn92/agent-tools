@@ -10,9 +10,13 @@ var pushCmd = &cobra.Command{
 	Long: `Commands for packaging and pushing artifacts to OCI-compliant container registries.
 
 Push a Pi agent:
-  agent-tools push piagent ./my-agent/ -t ghcr.io/myorg/pr-classifier:v1.0.0`,
+  agent-tools push piagent ./my-agent/ -t ghcr.io/myorg/pr-classifier:v1.0.0
+
+Push a tool package:
+  agent-tools push tool ./tools/git/ -t ghcr.io/myorg/agent-tools/git:0.1.0`,
 }
 
 func init() {
 	pushCmd.AddCommand(pushPiagentCmd)
+	pushCmd.AddCommand(pushToolCmd)
 }
