@@ -1,5 +1,5 @@
 // Package main provides the agent-tools CLI.
-// This CLI is used to build tool images, manage the catalog, and other utilities.
+// This CLI is used to push OCI artifacts (tool packages and Pi agents) to registries.
 package main
 
 import (
@@ -13,14 +13,14 @@ var version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:   "agent-tools",
-	Short: "Agent Tools CLI for building and managing agent tool images",
-	Long: `Agent Tools CLI provides utilities for building tool images and packaging
-Pi agents for the Agent Operator ecosystem.
+	Short: "Agent Tools CLI for pushing OCI artifacts",
+	Long: `Agent Tools CLI provides utilities for packaging and pushing tool packages
+and Pi agents as OCI artifacts.
 
-Build tool images:
-  agent-tools tool build -f tool.yaml -t myimage:latest
+Push a tool package:
+  agent-tools push tool ./tools/git/ -t ghcr.io/myorg/agent-tools/git:0.1.0
 
-Push Pi agent artifacts:
+Push a Pi agent:
   agent-tools push piagent ./my-agent/ -t ghcr.io/myorg/agent:v1.0.0
 
 For more information, see https://github.com/samyn92/agent-tools`,
@@ -36,6 +36,5 @@ func main() {
 
 func init() {
 	// Add subcommands
-	rootCmd.AddCommand(toolCmd)
 	rootCmd.AddCommand(pushCmd)
 }
