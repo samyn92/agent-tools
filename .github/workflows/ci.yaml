@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - name: Build
         run: go build -v ./...
@@ -32,11 +32,15 @@ jobs:
           for dir in tools/*/; do
             [ -d "$dir" ] || continue
             name=$(basename "$dir")
-            if [ ! -f "${dir}index.js" ] && [ ! -f "${dir}index.ts" ]; then
-              echo "ERROR: ${name} missing index.js or index.ts"
+            # Pi tools have index.js/ts, MCP tools have manifest.json
+            if [ -f "${dir}index.js" ] || [ -f "${dir}index.ts" ]; then
+              echo "OK: ${name} (Pi tool)"
+            elif [ -f "${dir}manifest.json" ]; then
+              echo "OK: ${name} (MCP tool)"
+            else
+              echo "ERROR: ${name} missing index.js/ts or manifest.json"
               exit 1
             fi
-            echo "OK: ${name}"
           done
 
       - name: Validate agent packages
