@@ -22,21 +22,31 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-  validate-catalog:
+  validate-packages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.25'
-
-      - name: Validate all tool manifests
+      - name: Validate tool packages
         run: |
-          for dir in catalog/*/; do
-            manifest="${dir}tool.yaml"
-            if [ -f "$manifest" ]; then
-              echo "Validating $manifest..."
-              go run ./cmd/cli tool build -f "$manifest" -t validate:test --help > /dev/null || true
+          for dir in tools/*/; do
+            [ -d "$dir" ] || continue
+            name=$(basename "$dir")
+            if [ ! -f "${dir}index.js" ] && [ ! -f "${dir}index.ts" ]; then
+              echo "ERROR: ${name} missing index.js or index.ts"
+              exit 1
             fi
+            echo "OK: ${name}"
+          done
+
+      - name: Validate agent packages
+        run: |
+          for dir in agents/*/; do
+            [ -d "$dir" ] || continue
+            name=$(basename "$dir")
+            if [ ! -f "${dir}index.js" ] && [ ! -f "${dir}index.ts" ]; then
+              echo "ERROR: ${name} missing index.js or index.ts"
+              exit 1
+            fi
+            echo "OK: ${name}"
           done
