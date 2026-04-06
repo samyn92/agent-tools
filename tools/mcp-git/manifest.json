@@ -1,0 +1,6 @@
+{
+  "name": "git",
+  "command": "mcp-git",
+  "transport": "stdio",
+  "description": "Git operations (status, diff, log, add, commit, push, pull, branch, clone)"
+}

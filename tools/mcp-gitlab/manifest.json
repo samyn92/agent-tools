@@ -1,0 +1,6 @@
+{
+  "name": "gitlab",
+  "command": "mcp-gitlab",
+  "transport": "stdio",
+  "description": "GitLab API operations (MRs, issues, pipelines, projects)"
+}

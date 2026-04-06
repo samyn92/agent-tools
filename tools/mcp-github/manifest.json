@@ -1,0 +1,6 @@
+{
+  "name": "github",
+  "command": "mcp-github",
+  "transport": "stdio",
+  "description": "GitHub API operations (PRs, issues, branches, checks, workflows)"
+}
