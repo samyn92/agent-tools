@@ -39,6 +39,10 @@ type ArtifactConfig struct {
 
 	// Label is a human-readable label for log messages (e.g., "tool package", "Pi agent").
 	Label string
+
+	// SkipValidation skips the default index.ts/index.js validation.
+	// Callers (e.g., MCP tool pusher) do their own validation before calling Push.
+	SkipValidation bool
 }
 
 // PushOptions configures a push operation.
@@ -78,8 +82,10 @@ func (p *Pusher) Push(ctx context.Context, opts PushOptions) error {
 		return fmt.Errorf("source directory is required")
 	}
 
-	if err := ValidateSource(opts.SourceDir); err != nil {
-		return fmt.Errorf("invalid source: %w", err)
+	if !p.Config.SkipValidation {
+		if err := ValidateSource(opts.SourceDir); err != nil {
+			return fmt.Errorf("invalid source: %w", err)
+		}
 	}
 
 	fmt.Fprintf(p.Output, "Packaging %s from %s\n", p.Config.Label, opts.SourceDir)

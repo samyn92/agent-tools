@@ -1,0 +1,6 @@
+{
+  "name": "kubernetes",
+  "command": "kubernetes",
+  "transport": "stdio",
+  "description": "Kubernetes operations via kubectl (get, describe, logs, apply, delete, exec, namespaces)"
+}
