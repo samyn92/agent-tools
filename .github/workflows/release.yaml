@@ -75,6 +75,7 @@ jobs:
           - git
           - github
           - gitlab
+          - kubectl
     steps:
       - uses: actions/checkout@v4
 

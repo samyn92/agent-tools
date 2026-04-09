@@ -35,6 +35,7 @@ agent-tools/
     reference.go          #   OCI reference parsing
   servers/                # MCP tool servers
     kube-explore/         #   Intent-based Kubernetes discovery
+    kubectl/              #   kubectl CLI (readonly + readwrite modes)
     git/                  #   Git operations
     github/               #   GitHub API
     gitlab/               #   GitLab API
@@ -123,6 +124,7 @@ All servers are compiled Go binaries implementing the MCP stdio transport. Each 
 | Server | Tools Provided |
 |--------|---------------|
 | `servers/kube-explore` | `kube_find`, `kube_health`, `kube_inspect`, `kube_topology`, `kube_diff`, `kube_logs`, `kube_exec`, `kube_apply` |
+| `servers/kubectl` | **readonly:** `kubectl_get`, `kubectl_describe`, `kubectl_logs`, `kubectl_top`, `kubectl_events`, `kubectl_api_resources`, `kubectl_explain` -- **readwrite** (MODE=readwrite): + `kubectl_exec`, `kubectl_apply`, `kubectl_delete`, `kubectl_run`, `kubectl_cp`, `kubectl_rollout`, `kubectl_scale`, `kubectl_label`, `kubectl_annotate` |
 | `servers/git` | `git_status`, `git_diff`, `git_log`, `git_add`, `git_commit`, `git_push`, `git_pull`, `git_branch`, `git_branch_list`, `git_show`, `git_clone`, `git_clone_or_pull` |
 | `servers/github` | `github_get_repo`, `github_list_prs`, `github_get_pr`, `github_get_pr_diff`, `github_create_pr`, `github_add_pr_comment`, `github_list_issues`, `github_get_issue`, `github_add_issue_comment`, `github_list_branches`, `github_get_check_runs`, `github_get_workflow_runs` |
 | `servers/gitlab` | `gitlab_get_project`, `gitlab_list_mrs`, `gitlab_get_mr`, `gitlab_get_mr_diff`, `gitlab_create_mr`, `gitlab_add_mr_note`, `gitlab_list_issues`, `gitlab_get_issue`, `gitlab_add_issue_note`, `gitlab_get_pipeline` |
@@ -137,6 +139,58 @@ Intent-based Kubernetes discovery server designed to answer complex questions in
 - **Native AgentOps CRD support** -- Understands `agents`, `agentruns`, `channels`, and `mcpservers` resources
 - **Deep inspection** -- `kube_inspect` returns logs, events, owner chain, and related resources in one response
 - **Cluster health** -- `kube_health` provides a full cluster health snapshot
+
+### kubectl
+
+General-purpose kubectl MCP server with two operating modes:
+
+- **`MODE=readonly`** (default) -- Safe observability tools only. The agent can inspect, query, and diagnose but cannot modify anything.
+- **`MODE=readwrite`** -- All readonly tools plus mutating operations (exec, apply, delete, scale, etc.).
+
+#### Readonly tools
+
+| Tool | Description |
+|------|-------------|
+| `kubectl_get` | Get resources with selectors, output formats, all-namespaces |
+| `kubectl_describe` | Detailed resource information including events/conditions |
+| `kubectl_logs` | Pod logs with tail, since, previous, container selection |
+| `kubectl_top` | CPU/memory usage for pods and nodes |
+| `kubectl_events` | Cluster events filtered by namespace, resource, or type |
+| `kubectl_api_resources` | List available API resource types |
+| `kubectl_explain` | Describe resource type fields |
+
+#### Readwrite tools (MODE=readwrite only)
+
+| Tool | Description |
+|------|-------------|
+| `kubectl_exec` | Execute commands in running containers (with timeout) |
+| `kubectl_apply` | Apply YAML/JSON manifests (supports dry-run) |
+| `kubectl_delete` | Delete resources by name or selector (supports force) |
+| `kubectl_run` | Run one-off pods with a command |
+| `kubectl_cp` | Copy files to/from containers |
+| `kubectl_rollout` | Rollout management: status, history, undo, restart |
+| `kubectl_scale` | Scale deployments, replicasets, statefulsets |
+| `kubectl_label` | Add/update/remove labels |
+| `kubectl_annotate` | Add/update/remove annotations |
+
+#### Usage
+
+```yaml
+# Readonly (safe for any agent)
+spec:
+  toolRefs:
+    - name: kubectl
+      ref: ghcr.io/myorg/agent-tools/kubectl:0.3.0
+
+# Readwrite (agent can modify cluster state)
+spec:
+  toolRefs:
+    - name: kubectl
+      ref: ghcr.io/myorg/agent-tools/kubectl:0.3.0
+      env:
+        - name: MODE
+          value: readwrite
+```
 
 ## Development
 
@@ -205,6 +259,7 @@ Triggered by `v*` tags:
 | Image | Source | Purpose |
 |-------|--------|---------|
 | `ghcr.io/samyn92/agent-tools/kube-explore` | `servers/kube-explore/Dockerfile` | Kube-explore MCP server |
+| `ghcr.io/samyn92/agent-tools/kubectl` | `servers/kubectl/Dockerfile` | kubectl MCP server (readonly/readwrite) |
 
 ## Related Repositories
 
