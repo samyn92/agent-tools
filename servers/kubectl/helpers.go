@@ -50,18 +50,20 @@ func kubeWithTimeout(timeout time.Duration, args ...string) *mcp.CallToolResult 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	cmdLine := "$ kubectl " + strings.Join(args, " ")
+
 	cmd := exec.CommandContext(ctx, kubectlBin, args...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("kubectl %s timed out after %s\n%s", strings.Join(args, " "), timeout, string(out))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\ntimed out after %s\n%s", cmdLine, timeout, string(out))}},
 			IsError: true,
 		}
 	}
 	if err != nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("kubectl %s failed: %s\n%s", strings.Join(args, " "), err, string(out))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\n%s\n%s", cmdLine, err, strings.TrimSpace(string(out)))}},
 			IsError: true,
 		}
 	}
@@ -69,7 +71,6 @@ func kubeWithTimeout(timeout time.Duration, args ...string) *mcp.CallToolResult 
 	if text == "" {
 		text = "(no output)"
 	}
-	cmdLine := "$ kubectl " + strings.Join(args, " ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + text}},
 	}
