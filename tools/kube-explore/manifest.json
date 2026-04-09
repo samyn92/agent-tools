@@ -1,0 +1,6 @@
+{
+  "name": "kube-explore",
+  "command": "kube-explore",
+  "transport": "stdio",
+  "description": "Intent-based Kubernetes discovery & operations — fuzzy find, cluster health, deep inspect, topology graph, diff, enhanced logs, exec. One intent, one call."
+}
