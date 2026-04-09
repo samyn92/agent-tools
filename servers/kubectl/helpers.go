@@ -69,8 +69,9 @@ func kubeWithTimeout(timeout time.Duration, args ...string) *mcp.CallToolResult 
 	if text == "" {
 		text = "(no output)"
 	}
+	cmdLine := "$ kubectl " + strings.Join(args, " ")
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + text}},
 	}
 }
 
