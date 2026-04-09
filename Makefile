@@ -27,9 +27,9 @@ SERVER_NAMES := $(notdir $(SERVERS))
 # Build a single server: make build-server SERVER=kubectl
 build-server:
 	@test -n "$(SERVER)" || (echo "usage: make build-server SERVER=<name>" && exit 1)
-	@BIN_NAME=$(SERVER); \
-	case "$(SERVER)" in kubectl|flux) BIN_NAME="mcp-$(SERVER)";; esac; \
+	@BIN_NAME=$$(cat servers/$(SERVER)/manifest.json | grep '"command"' | sed 's/.*: *"\([^"]*\)".*/\1/'); \
 	cd servers/$(SERVER) && \
+		mkdir -p dist/bin && \
 		CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dist/bin/$$BIN_NAME . && \
 		cp manifest.json dist/
 	@if [ "$(SERVER)" = "kubectl" ] && [ ! -f servers/kubectl/dist/bin/kubectl ]; then \
