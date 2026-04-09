@@ -37,6 +37,7 @@ jobs:
           - github
           - gitlab
           - kubectl
+          - flux
     steps:
       - uses: actions/checkout@v4
 

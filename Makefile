@@ -28,7 +28,7 @@ SERVER_NAMES := $(notdir $(SERVERS))
 build-server:
 	@test -n "$(SERVER)" || (echo "usage: make build-server SERVER=<name>" && exit 1)
 	@BIN_NAME=$(SERVER); \
-	if [ "$(SERVER)" = "kubectl" ]; then BIN_NAME="mcp-kubectl"; fi; \
+	case "$(SERVER)" in kubectl|flux) BIN_NAME="mcp-$(SERVER)";; esac; \
 	cd servers/$(SERVER) && \
 		CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dist/bin/$$BIN_NAME . && \
 		cp manifest.json dist/
@@ -38,6 +38,14 @@ build-server:
 		curl -sLo servers/kubectl/dist/bin/kubectl \
 			"https://dl.k8s.io/release/$${KUBE_VERSION}/bin/linux/amd64/kubectl"; \
 		chmod +x servers/kubectl/dist/bin/kubectl; \
+	fi
+	@if [ "$(SERVER)" = "flux" ] && [ ! -f servers/flux/dist/bin/flux ]; then \
+		echo "Bundling flux binary..."; \
+		FLUX_VERSION=$$(curl -sL https://api.github.com/repos/fluxcd/flux2/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/'); \
+		curl -sLo /tmp/flux.tar.gz \
+			"https://github.com/fluxcd/flux2/releases/download/v$${FLUX_VERSION}/flux_$${FLUX_VERSION}_linux_amd64.tar.gz"; \
+		tar -xzf /tmp/flux.tar.gz -C servers/flux/dist/bin/ flux; \
+		chmod +x servers/flux/dist/bin/flux; \
 	fi
 
 # Build all servers

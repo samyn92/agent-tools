@@ -1,0 +1,6 @@
+{
+  "name": "flux",
+  "command": "mcp-flux",
+  "transport": "stdio",
+  "description": "Flux CD GitOps operations with readonly and readwrite modes. Set MODE=readwrite to enable reconcile, suspend, resume, and delete operations."
+}

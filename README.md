@@ -36,6 +36,7 @@ agent-tools/
   servers/                # MCP tool servers
     kube-explore/         #   Intent-based Kubernetes discovery
     kubectl/              #   kubectl CLI (readonly + readwrite modes)
+    flux/                 #   Flux CD GitOps (readonly + readwrite modes)
     git/                  #   Git operations
     github/               #   GitHub API
     gitlab/               #   GitLab API
@@ -125,6 +126,7 @@ All servers are compiled Go binaries implementing the MCP stdio transport. Each 
 |--------|---------------|
 | `servers/kube-explore` | `kube_find`, `kube_health`, `kube_inspect`, `kube_topology`, `kube_diff`, `kube_logs`, `kube_exec`, `kube_apply` |
 | `servers/kubectl` | **readonly:** `kubectl_get`, `kubectl_describe`, `kubectl_logs`, `kubectl_top`, `kubectl_events`, `kubectl_api_resources`, `kubectl_explain` -- **readwrite** (MODE=readwrite): + `kubectl_exec`, `kubectl_apply`, `kubectl_delete`, `kubectl_run`, `kubectl_cp`, `kubectl_rollout`, `kubectl_scale`, `kubectl_label`, `kubectl_annotate` |
+| `servers/flux` | **readonly:** `flux_get`, `flux_check`, `flux_stats`, `flux_logs`, `flux_events`, `flux_trace`, `flux_tree`, `flux_diff`, `flux_export`, `flux_debug`, `flux_version` -- **readwrite** (MODE=readwrite): + `flux_reconcile`, `flux_suspend`, `flux_resume`, `flux_delete` |
 | `servers/git` | `git_status`, `git_diff`, `git_log`, `git_add`, `git_commit`, `git_push`, `git_pull`, `git_branch`, `git_branch_list`, `git_show`, `git_clone`, `git_clone_or_pull` |
 | `servers/github` | `github_get_repo`, `github_list_prs`, `github_get_pr`, `github_get_pr_diff`, `github_create_pr`, `github_add_pr_comment`, `github_list_issues`, `github_get_issue`, `github_add_issue_comment`, `github_list_branches`, `github_get_check_runs`, `github_get_workflow_runs` |
 | `servers/gitlab` | `gitlab_get_project`, `gitlab_list_mrs`, `gitlab_get_mr`, `gitlab_get_mr_diff`, `gitlab_create_mr`, `gitlab_add_mr_note`, `gitlab_list_issues`, `gitlab_get_issue`, `gitlab_add_issue_note`, `gitlab_get_pipeline` |
@@ -187,6 +189,57 @@ spec:
   toolRefs:
     - name: kubectl
       ref: ghcr.io/myorg/agent-tools/kubectl:0.3.0
+      env:
+        - name: MODE
+          value: readwrite
+```
+
+### flux
+
+Flux CD GitOps MCP server with two operating modes:
+
+- **`MODE=readonly`** (default) -- Observe and diagnose Flux resources without modifying anything.
+- **`MODE=readwrite`** -- All readonly tools plus reconcile, suspend, resume, and delete.
+
+#### Readonly tools
+
+| Tool | Description |
+|------|-------------|
+| `flux_get` | Get Flux resources: all, helmreleases, kustomizations, sources, alerts, receivers, images |
+| `flux_check` | Check Flux prerequisites and controller health |
+| `flux_stats` | Resource reconciliation statistics |
+| `flux_logs` | Controller logs with kind/name/level/since filtering |
+| `flux_events` | Flux events filtered by namespace or resource |
+| `flux_trace` | Trace a Kubernetes object to its Flux source |
+| `flux_tree` | Show kustomization resource tree with status |
+| `flux_diff` | Diff kustomization against live cluster state |
+| `flux_export` | Export Flux resources as YAML manifests |
+| `flux_debug` | Debug helmrelease or kustomization (computed values, rendered manifests) |
+| `flux_version` | Show CLI and controller versions |
+
+#### Readwrite tools (MODE=readwrite only)
+
+| Tool | Description |
+|------|-------------|
+| `flux_reconcile` | Trigger reconciliation (with optional --with-source) |
+| `flux_suspend` | Suspend reconciliation for a resource |
+| `flux_resume` | Resume a suspended resource |
+| `flux_delete` | Delete a Flux resource |
+
+#### Usage
+
+```yaml
+# Readonly
+spec:
+  toolRefs:
+    - name: flux
+      ref: ghcr.io/myorg/agent-tools/flux:0.4.0
+
+# Readwrite
+spec:
+  toolRefs:
+    - name: flux
+      ref: ghcr.io/myorg/agent-tools/flux:0.4.0
       env:
         - name: MODE
           value: readwrite
@@ -260,6 +313,7 @@ Triggered by `v*` tags:
 |-------|--------|---------|
 | `ghcr.io/samyn92/agent-tools/kube-explore` | `servers/kube-explore/Dockerfile` | Kube-explore MCP server |
 | `ghcr.io/samyn92/agent-tools/kubectl` | `servers/kubectl/Dockerfile` | kubectl MCP server (readonly/readwrite) |
+| `ghcr.io/samyn92/agent-tools/flux` | OCI artifact | Flux CD MCP server (readonly/readwrite) |
 
 ## Related Repositories
 

@@ -76,6 +76,7 @@ jobs:
           - github
           - gitlab
           - kubectl
+          - flux
     steps:
       - uses: actions/checkout@v4
 
@@ -94,13 +95,12 @@ jobs:
         working-directory: servers/${{ matrix.server }}
         run: |
           mkdir -p dist/bin
-          # For kubectl server, the MCP binary is named mcp-kubectl to avoid
-          # collision with the kubectl CLI binary bundled alongside it.
-          if [ "${{ matrix.server }}" = "kubectl" ]; then
-            BIN_NAME="mcp-kubectl"
-          else
-            BIN_NAME="${{ matrix.server }}"
-          fi
+          # For servers that bundle a CLI binary alongside the MCP server,
+          # name the MCP binary with mcp- prefix to avoid collision.
+          case "${{ matrix.server }}" in
+            kubectl|flux) BIN_NAME="mcp-${{ matrix.server }}" ;;
+            *) BIN_NAME="${{ matrix.server }}" ;;
+          esac
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags="-s -w" \
             -o "dist/bin/${BIN_NAME}" .
@@ -114,6 +114,16 @@ jobs:
           curl -sLo servers/kubectl/dist/bin/kubectl \
             "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/amd64/kubectl"
           chmod +x servers/kubectl/dist/bin/kubectl
+
+      - name: Bundle flux CLI binary
+        if: matrix.server == 'flux'
+        run: |
+          FLUX_VERSION=$(curl -sL https://api.github.com/repos/fluxcd/flux2/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+          echo "Downloading flux ${FLUX_VERSION}"
+          curl -sLo /tmp/flux.tar.gz \
+            "https://github.com/fluxcd/flux2/releases/download/v${FLUX_VERSION}/flux_${FLUX_VERSION}_linux_amd64.tar.gz"
+          tar -xzf /tmp/flux.tar.gz -C servers/flux/dist/bin/ flux
+          chmod +x servers/flux/dist/bin/flux
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
