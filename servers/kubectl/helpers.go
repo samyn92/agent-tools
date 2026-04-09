@@ -5,11 +5,35 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// kubectlBin is the resolved path to the kubectl binary.
+// Determined once at startup by resolveKubectl.
+var kubectlBin string
+
+// resolveKubectl finds the kubectl binary. It checks the directory
+// containing this binary first (for OCI artifact co-bundling), then
+// falls back to PATH lookup.
+func resolveKubectl() string {
+	// Check sibling of our own binary: /tools/kubectl/bin/kubectl
+	self, err := os.Executable()
+	if err == nil {
+		sibling := filepath.Join(filepath.Dir(self), "kubectl")
+		if _, err := os.Stat(sibling); err == nil {
+			return sibling
+		}
+	}
+	// Fall back to PATH
+	if p, err := exec.LookPath("kubectl"); err == nil {
+		return p
+	}
+	return "kubectl" // let it fail with a clear error
+}
 
 // add registers a tool with the MCP server using typed input.
 func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
@@ -26,7 +50,7 @@ func kubeWithTimeout(timeout time.Duration, args ...string) *mcp.CallToolResult 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	cmd := exec.CommandContext(ctx, kubectlBin, args...)
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 	if ctx.Err() == context.DeadlineExceeded {

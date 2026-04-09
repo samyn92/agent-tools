@@ -22,6 +22,8 @@ import (
 )
 
 func main() {
+	kubectlBin = resolveKubectl()
+
 	mode := os.Getenv("MODE")
 	if mode == "" {
 		mode = "readonly"

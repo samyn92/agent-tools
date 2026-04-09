@@ -1,6 +1,6 @@
 {
   "name": "kubectl",
-  "command": "kubectl",
+  "command": "mcp-kubectl",
   "transport": "stdio",
   "description": "Kubernetes kubectl operations with readonly and readwrite modes. Set MODE=readwrite to enable mutating operations."
 }

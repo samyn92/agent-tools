@@ -94,10 +94,26 @@ jobs:
         working-directory: servers/${{ matrix.server }}
         run: |
           mkdir -p dist/bin
+          # For kubectl server, the MCP binary is named mcp-kubectl to avoid
+          # collision with the kubectl CLI binary bundled alongside it.
+          if [ "${{ matrix.server }}" = "kubectl" ]; then
+            BIN_NAME="mcp-kubectl"
+          else
+            BIN_NAME="${{ matrix.server }}"
+          fi
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags="-s -w" \
-            -o dist/bin/${{ matrix.server }} .
+            -o "dist/bin/${BIN_NAME}" .
           cp manifest.json dist/
+
+      - name: Bundle kubectl CLI binary
+        if: matrix.server == 'kubectl'
+        run: |
+          KUBE_VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
+          echo "Downloading kubectl ${KUBE_VERSION}"
+          curl -sLo servers/kubectl/dist/bin/kubectl \
+            "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x servers/kubectl/dist/bin/kubectl
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3

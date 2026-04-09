@@ -24,12 +24,21 @@ SERVER_NAMES := $(notdir $(SERVERS))
 
 .PHONY: build-server build-servers push-server push-servers
 
-# Build a single server: make build-server SERVER=kubernetes
+# Build a single server: make build-server SERVER=kubectl
 build-server:
 	@test -n "$(SERVER)" || (echo "usage: make build-server SERVER=<name>" && exit 1)
+	@BIN_NAME=$(SERVER); \
+	if [ "$(SERVER)" = "kubectl" ]; then BIN_NAME="mcp-kubectl"; fi; \
 	cd servers/$(SERVER) && \
-		CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dist/bin/$(SERVER) . && \
+		CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o dist/bin/$$BIN_NAME . && \
 		cp manifest.json dist/
+	@if [ "$(SERVER)" = "kubectl" ] && [ ! -f servers/kubectl/dist/bin/kubectl ]; then \
+		echo "Bundling kubectl binary..."; \
+		KUBE_VERSION=$$(curl -sL https://dl.k8s.io/release/stable.txt); \
+		curl -sLo servers/kubectl/dist/bin/kubectl \
+			"https://dl.k8s.io/release/$${KUBE_VERSION}/bin/linux/amd64/kubectl"; \
+		chmod +x servers/kubectl/dist/bin/kubectl; \
+	fi
 
 # Build all servers
 build-servers:
