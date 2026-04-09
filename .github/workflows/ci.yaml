@@ -7,7 +7,8 @@ on:
     branches: [main, dev]
 
 jobs:
-  build-and-test:
+  cli:
+    name: CLI build & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,38 +20,41 @@ jobs:
       - name: Build
         run: go build -v ./...
 
+      - name: Vet
+        run: go vet ./...
+
       - name: Test
         run: go test -v ./...
 
-  validate-packages:
+  servers:
+    name: Build servers
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server:
+          - kube-explore
+          - git
+          - github
+          - gitlab
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate tool packages
-        run: |
-          for dir in tools/*/; do
-            [ -d "$dir" ] || continue
-            name=$(basename "$dir")
-            # Pi tools have index.js/ts, MCP tools have manifest.json
-            if [ -f "${dir}index.js" ] || [ -f "${dir}index.ts" ]; then
-              echo "OK: ${name} (Pi tool)"
-            elif [ -f "${dir}manifest.json" ]; then
-              echo "OK: ${name} (MCP tool)"
-            else
-              echo "ERROR: ${name} missing index.js/ts or manifest.json"
-              exit 1
-            fi
-          done
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
 
-      - name: Validate agent packages
+      - name: Build ${{ matrix.server }}
+        working-directory: servers/${{ matrix.server }}
+        run: CGO_ENABLED=0 go build -v ./...
+
+      - name: Vet ${{ matrix.server }}
+        working-directory: servers/${{ matrix.server }}
+        run: go vet ./...
+
+      - name: Validate manifest.json
         run: |
-          for dir in agents/*/; do
-            [ -d "$dir" ] || continue
-            name=$(basename "$dir")
-            if [ ! -f "${dir}index.js" ] && [ ! -f "${dir}index.ts" ]; then
-              echo "ERROR: ${name} missing index.js or index.ts"
-              exit 1
-            fi
-            echo "OK: ${name}"
-          done
+          if [ ! -f "servers/${{ matrix.server }}/manifest.json" ]; then
+            echo "ERROR: servers/${{ matrix.server }}/manifest.json missing"
+            exit 1
+          fi
+          echo "OK: ${{ matrix.server }}"

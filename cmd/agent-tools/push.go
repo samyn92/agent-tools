@@ -8,17 +8,17 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/samyn92/agent-tools/pkg/mcppush"
+	"github.com/samyn92/agent-tools/internal/oci"
 	"github.com/spf13/cobra"
 )
 
 var (
-	pushMCPToolTag       string
-	pushMCPToolPlainHTTP bool
+	pushTag       string
+	pushPlainHTTP bool
 )
 
-var pushMCPToolCmd = &cobra.Command{
-	Use:   "mcp-tool [directory]",
+var pushCmd = &cobra.Command{
+	Use:   "push [directory]",
 	Short: "Push an MCP tool server as an OCI artifact",
 	Long: `Package an MCP tool directory as an OCI artifact and push it to a registry.
 
@@ -31,31 +31,31 @@ MCP-compatible agent runtime (Fantasy, Crush, Claude Code, etc.)
 
 Examples:
   # Build the Go binary first, then push:
-  cd tools/kubernetes && CGO_ENABLED=0 go build -o dist/bin/kubernetes .
+  cd servers/kube-explore && CGO_ENABLED=0 go build -o dist/bin/kube-explore .
   cp manifest.json dist/
-  agent-tools push mcp-tool ./dist/ -t ghcr.io/myorg/tools/kubernetes:0.1.0
+  agent-tools push ./dist/ -t ghcr.io/myorg/agent-tools/kube-explore:0.2.0
 
 The pushed artifact can be referenced in an Agent CRD:
   spec:
     toolRefs:
-      - name: kubernetes
+      - name: kube-explore
         ociRef:
-          ref: ghcr.io/myorg/tools/kubernetes:0.1.0
+          ref: ghcr.io/myorg/agent-tools/kube-explore:0.2.0
 
 Media types:
   Artifact type: application/vnd.agents.io.mcp-tool.v1
   Code layer:    application/vnd.agents.io.mcp-tool.code.v1.tar+gzip`,
 	Args: cobra.ExactArgs(1),
-	RunE: runPushMCPTool,
+	RunE: runPush,
 }
 
 func init() {
-	pushMCPToolCmd.Flags().StringVarP(&pushMCPToolTag, "tag", "t", "", "OCI reference to push to (required)")
-	pushMCPToolCmd.Flags().BoolVar(&pushMCPToolPlainHTTP, "plain-http", false, "Use HTTP instead of HTTPS for the registry")
-	pushMCPToolCmd.MarkFlagRequired("tag")
+	pushCmd.Flags().StringVarP(&pushTag, "tag", "t", "", "OCI reference to push to (required)")
+	pushCmd.Flags().BoolVar(&pushPlainHTTP, "plain-http", false, "Use HTTP instead of HTTPS for the registry")
+	pushCmd.MarkFlagRequired("tag")
 }
 
-func runPushMCPTool(cmd *cobra.Command, args []string) error {
+func runPush(cmd *cobra.Command, args []string) error {
 	sourceDir := args[0]
 	absDir, err := filepath.Abs(sourceDir)
 	if err != nil {
@@ -69,7 +69,7 @@ func runPushMCPTool(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%s is not a directory", sourceDir)
 	}
 
-	pusher := mcppush.NewPusher()
+	pusher := oci.NewPusher()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -81,14 +81,9 @@ func runPushMCPTool(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	opts := mcppush.PushOptions{
-		Tag:       pushMCPToolTag,
+	return pusher.Push(ctx, oci.PushOptions{
+		Tag:       pushTag,
 		SourceDir: absDir,
-		PlainHTTP: pushMCPToolPlainHTTP,
-	}
-
-	if err := pusher.Push(ctx, opts); err != nil {
-		return fmt.Errorf("push failed: %w", err)
-	}
-	return nil
+		PlainHTTP: pushPlainHTTP,
+	})
 }

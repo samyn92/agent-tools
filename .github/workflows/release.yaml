@@ -13,8 +13,8 @@ permissions:
   packages: write
 
 jobs:
-  # Build CLI binaries and attach to GitHub Release
   cli-release:
+    name: CLI binaries
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,7 +32,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - name: Extract version from tag
         id: version
@@ -46,29 +46,45 @@ jobs:
         run: |
           go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
             -o agent-tools-${{ matrix.goos }}-${{ matrix.goarch }} \
-            ./cmd/cli
+            ./cmd/agent-tools
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ github.ref_name }}" agent-tools-${{ matrix.goos }}-${{ matrix.goarch }} --clobber
 
-  # Push tool packages (tools/*/) as OCI artifacts to ghcr.io
-  tool-packages:
+  server-packages:
+    name: MCP server OCI artifacts
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server:
+          - kube-explore
+          - git
+          - github
+          - gitlab
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build CLI
-        run: go build -o ./agent-tools ./cmd/cli
+        run: go build -o ./agent-tools ./cmd/agent-tools
+
+      - name: Build ${{ matrix.server }} server binary
+        working-directory: servers/${{ matrix.server }}
+        run: |
+          mkdir -p dist/bin
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-s -w" \
+            -o dist/bin/${{ matrix.server }} .
+          cp manifest.json dist/
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -77,52 +93,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push tool packages
+      - name: Push ${{ matrix.server }}
         run: |
-          for dir in tools/*/; do
-            [ -d "$dir" ] || continue
-            name=$(basename "$dir")
-            ref="${{ env.REGISTRY }}/${{ github.repository_owner }}/agent-tools/${name}:${{ steps.version.outputs.version }}"
-            echo "Pushing ${name} -> ${ref}"
-            ./agent-tools push tool "$dir" -t "$ref"
-            echo "Tagging as latest"
-            ref_latest="${{ env.REGISTRY }}/${{ github.repository_owner }}/agent-tools/${name}:latest"
-            ./agent-tools push tool "$dir" -t "$ref_latest"
-          done
+          ref="${{ env.REGISTRY }}/${{ github.repository_owner }}/agent-tools/${{ matrix.server }}:${{ steps.version.outputs.version }}"
+          echo "Pushing ${{ matrix.server }} -> ${ref}"
+          ./agent-tools push servers/${{ matrix.server }}/dist/ -t "$ref"
 
-  # Push agent source packages (agents/*/) as OCI artifacts to ghcr.io
-  agent-packages:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: '1.25'
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Build CLI
-        run: go build -o ./agent-tools ./cmd/cli
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push agent packages
-        run: |
-          for dir in agents/*/; do
-            [ -d "$dir" ] || continue
-            name=$(basename "$dir")
-            ref="${{ env.REGISTRY }}/${{ github.repository_owner }}/agents/${name}:${{ steps.version.outputs.version }}"
-            echo "Pushing ${name} -> ${ref}"
-            ./agent-tools push piagent "$dir" -t "$ref"
-            echo "Tagging as latest"
-            ref_latest="${{ env.REGISTRY }}/${{ github.repository_owner }}/agents/${name}:latest"
-            ./agent-tools push piagent "$dir" -t "$ref_latest"
-          done
+          ref_latest="${{ env.REGISTRY }}/${{ github.repository_owner }}/agent-tools/${{ matrix.server }}:latest"
+          echo "Tagging as latest"
+          ./agent-tools push servers/${{ matrix.server }}/dist/ -t "$ref_latest"
