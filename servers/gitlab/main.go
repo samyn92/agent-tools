@@ -9,8 +9,9 @@ Requires: GITLAB_TOKEN env var.
 Optional: GITLAB_URL (default: https://gitlab.com)
 
 Tools: gitlab_get_project, gitlab_list_mrs, gitlab_get_mr, gitlab_get_mr_diff,
-       gitlab_create_mr, gitlab_add_mr_note, gitlab_list_issues,
-       gitlab_get_issue, gitlab_add_issue_note, gitlab_get_pipeline
+
+	gitlab_create_mr, gitlab_add_mr_note, gitlab_list_issues,
+	gitlab_get_issue, gitlab_add_issue_note, gitlab_get_pipeline
 */
 package main
 
@@ -156,7 +157,7 @@ func handleListIssues(_ context.Context, _ *mcp.CallToolRequest, in listIssuesIn
 	if in.Labels != "" {
 		u += "&labels=" + in.Labels
 	}
-	return glGet(u), nil, nil
+	return glGet("%s", u), nil, nil
 }
 
 func handleGetIssue(_ context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {

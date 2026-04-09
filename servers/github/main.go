@@ -9,9 +9,10 @@ Requires: GITHUB_TOKEN or GH_TOKEN env var.
 Optional: GITHUB_API_URL (default: https://api.github.com)
 
 Tools: github_get_repo, github_list_prs, github_get_pr, github_get_pr_diff,
-       github_create_pr, github_add_pr_comment, github_list_issues,
-       github_get_issue, github_add_issue_comment, github_list_branches,
-       github_get_check_runs, github_get_workflow_runs
+
+	github_create_pr, github_add_pr_comment, github_list_issues,
+	github_get_issue, github_add_issue_comment, github_list_branches,
+	github_get_check_runs, github_get_workflow_runs
 */
 package main
 
@@ -184,7 +185,7 @@ func handleListIssues(_ context.Context, _ *mcp.CallToolRequest, in listIssuesIn
 	if in.Labels != "" {
 		url += "&labels=" + in.Labels
 	}
-	return ghGet(url), nil, nil
+	return ghGet("%s", url), nil, nil
 }
 
 func handleGetIssue(_ context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
