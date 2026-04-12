@@ -46,14 +46,23 @@ func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]
 }
 
 // resolveCwd resolves a working directory relative to WORKSPACE.
-func resolveCwd(cwd string) string {
+// Returns an error if the resolved path escapes the workspace sandbox.
+func resolveCwd(cwd string) (string, error) {
 	if cwd == "" {
-		return workspace
+		return workspace, nil
 	}
+	var resolved string
 	if filepath.IsAbs(cwd) {
-		return cwd
+		resolved = filepath.Clean(cwd)
+	} else {
+		resolved = filepath.Clean(filepath.Join(workspace, cwd))
 	}
-	return filepath.Join(workspace, cwd)
+	// Ensure the resolved path is within the workspace sandbox.
+	wsClean := filepath.Clean(workspace)
+	if resolved != wsClean && !strings.HasPrefix(resolved, wsClean+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes workspace sandbox %q", cwd, workspace)
+	}
+	return resolved, nil
 }
 
 // git runs a git command with the default timeout and returns an MCP result.
@@ -71,10 +80,15 @@ func gitWithTimeout(timeout time.Duration, cwd string, args ...string) *mcp.Call
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
+	dir, err := resolveCwd(cwd)
+	if err != nil {
+		return errResult("blocked: %s", err)
+	}
+
 	cmdLine := "$ git " + strings.Join(args, " ")
 
 	cmd := exec.CommandContext(ctx, gitBin, args...)
-	cmd.Dir = resolveCwd(cwd)
+	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	out, err := cmd.CombinedOutput()
 

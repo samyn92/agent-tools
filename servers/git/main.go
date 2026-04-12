@@ -30,7 +30,7 @@ func main() {
 
 	mode := os.Getenv("MODE")
 	if mode == "" {
-		mode = "readwrite"
+		mode = "readonly"
 	}
 
 	serverName := "git-" + mode

@@ -120,7 +120,10 @@ func handleClone(_ context.Context, _ *mcp.CallToolRequest, in cloneInput) (*mcp
 	if in.URL == "" {
 		return errResult("url is required"), nil, nil
 	}
-	target := resolveCloneTarget(in.URL, in.Dir)
+	target, err := resolveCloneTarget(in.URL, in.Dir)
+	if err != nil {
+		return errResult("blocked: %s", err), nil, nil
+	}
 
 	args := []string{"clone"}
 	if in.Branch != "" {
@@ -145,7 +148,10 @@ func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPull
 	if in.URL == "" {
 		return errResult("url is required"), nil, nil
 	}
-	target := resolveCloneTarget(in.URL, in.Dir)
+	target, err := resolveCloneTarget(in.URL, in.Dir)
+	if err != nil {
+		return errResult("blocked: %s", err), nil, nil
+	}
 
 	if _, err := os.Stat(filepath.Join(target, ".git")); err == nil {
 		// Repo exists — pull
@@ -175,7 +181,7 @@ func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPull
 }
 
 // resolveCloneTarget determines the target directory for a clone.
-func resolveCloneTarget(url, dir string) string {
+func resolveCloneTarget(url, dir string) (string, error) {
 	if dir == "" {
 		parts := strings.Split(strings.TrimSuffix(url, ".git"), "/")
 		dir = parts[len(parts)-1]

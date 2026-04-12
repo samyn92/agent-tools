@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -89,19 +90,26 @@ func main() {
 			"exact pod name. One call replaces 2-3 kubectl calls.",
 		handleLogs)
 
-	addTool(server, "kube_exec",
-		"Execute a command in a pod. Enhanced: resolves fuzzy pod names first, "+
-			"so you don't need the exact pod name or namespace.",
-		handleExec)
-
 	// ============================================================
-	// Legacy tool (backward compat)
+	// Mutating / exec tools (only in readwrite mode)
 	// ============================================================
 
-	addTool(server, "kube_apply",
-		"Apply a YAML or JSON manifest using server-side apply. "+
-			"Creates or updates resources. Supports multi-document YAML.",
-		handleApply)
+	mode := os.Getenv("MODE")
+	if mode == "" {
+		mode = "readonly"
+	}
+
+	if mode == "readwrite" {
+		addTool(server, "kube_exec",
+			"Execute a command in a pod. Enhanced: resolves fuzzy pod names first, "+
+				"so you don't need the exact pod name or namespace.",
+			handleExec)
+
+		addTool(server, "kube_apply",
+			"Apply a YAML or JSON manifest using server-side apply. "+
+				"Creates or updates resources. Supports multi-document YAML.",
+			handleApply)
+	}
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
