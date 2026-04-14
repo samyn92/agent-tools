@@ -69,7 +69,11 @@ func initClients() {
 
 	dc := clientset.Discovery()
 	mapper = restmapper.NewDeferredDiscoveryRESTMapper(
-		&cachedDiscovery{dc},
+		&cachedDiscovery{
+			DiscoveryInterface: dc,
+			lastRefresh:        time.Now(),
+			ttl:                5 * time.Minute,
+		},
 	)
 }
 
@@ -488,9 +492,17 @@ func getEvents(ctx context.Context, namespace, name string) ([]corev1.Event, err
 }
 
 // cachedDiscovery wraps DiscoveryInterface for DeferredDiscoveryRESTMapper.
+// Invalidates the cache after a TTL to pick up new CRDs and API changes.
 type cachedDiscovery struct {
 	discovery.DiscoveryInterface
+	lastRefresh time.Time
+	ttl         time.Duration
 }
 
-func (c *cachedDiscovery) Fresh() bool { return true }
-func (c *cachedDiscovery) Invalidate() {}
+func (c *cachedDiscovery) Fresh() bool {
+	return time.Since(c.lastRefresh) < c.ttl
+}
+
+func (c *cachedDiscovery) Invalidate() {
+	c.lastRefresh = time.Time{} // zero time forces refresh on next Fresh() check
+}

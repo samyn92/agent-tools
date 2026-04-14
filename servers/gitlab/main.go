@@ -24,14 +24,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var (
-	apiBase string
-	token   string
+	apiBase    string
+	token      string
+	httpClient = &http.Client{Timeout: 30 * time.Second}
 )
 
 func main() {
@@ -58,7 +62,10 @@ func main() {
 	add(server, "gitlab_add_issue_note", "Add a comment (note) to an issue.", handleAddIssueNote)
 	add(server, "gitlab_get_pipeline", "Get details of a specific pipeline.", handleGetPipeline)
 
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		log.Fatal(err)
 	}
 }
@@ -192,12 +199,12 @@ func glPost(path string, payload map[string]any) *mcp.CallToolResult {
 }
 
 func doRequest(req *http.Request) *mcp.CallToolResult {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return errResult("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap
 
 	if resp.StatusCode >= 400 {
 		return errResult("HTTP %d: %s", resp.StatusCode, string(body))

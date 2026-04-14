@@ -23,15 +23,20 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var (
-	apiBase string
-	token   string
+	apiBase    string
+	token      string
+	httpClient = &http.Client{Timeout: 30 * time.Second}
 )
 
 func main() {
@@ -59,7 +64,10 @@ func main() {
 	add(server, "github_get_check_runs", "Get check runs for a commit ref.", handleGetCheckRuns)
 	add(server, "github_get_workflow_runs", "Get recent workflow runs for a repository.", handleGetWorkflowRuns)
 
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		log.Fatal(err)
 	}
 }
@@ -132,29 +140,29 @@ type workflowRunsInput struct {
 // ── Handlers ──
 
 func handleGetRepo(_ context.Context, _ *mcp.CallToolRequest, in repoInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s", in.Owner, in.Repo), nil, nil
+	return ghGet("/repos/%s/%s", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
 func handleListPRs(_ context.Context, _ *mcp.CallToolRequest, in listPRsInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "open")
-	return ghGet("/repos/%s/%s/pulls?state=%s&per_page=30", in.Owner, in.Repo, state), nil, nil
+	return ghGet("/repos/%s/%s/pulls?state=%s&per_page=30", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.QueryEscape(state)), nil, nil
 }
 
 func handleGetPR(_ context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/pulls/%d", in.Owner, in.Repo, in.Number), nil, nil
+	return ghGet("/repos/%s/%s/pulls/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
 }
 
 func handleGetPRDiff(_ context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d", apiBase, in.Owner, in.Repo, in.Number)
+	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d", apiBase, url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github.v3.diff")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return errResult("request failed: %v", err), nil, nil
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap (diffs can be large)
 	if resp.StatusCode >= 400 {
 		return errResult("HTTP %d: %s", resp.StatusCode, string(body)), nil, nil
 	}
@@ -171,42 +179,42 @@ func handleCreatePR(_ context.Context, _ *mcp.CallToolRequest, in createPRInput)
 	if in.Body != "" {
 		payload["body"] = in.Body
 	}
-	return ghPost(fmt.Sprintf("/repos/%s/%s/pulls", in.Owner, in.Repo), payload), nil, nil
+	return ghPost(fmt.Sprintf("/repos/%s/%s/pulls", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), payload), nil, nil
 }
 
 func handleAddPRComment(_ context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
-	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", in.Owner, in.Repo, in.Number),
+	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
 func handleListIssues(_ context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "open")
-	url := fmt.Sprintf("/repos/%s/%s/issues?state=%s&per_page=30", in.Owner, in.Repo, state)
+	path := fmt.Sprintf("/repos/%s/%s/issues?state=%s&per_page=30", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.QueryEscape(state))
 	if in.Labels != "" {
-		url += "&labels=" + in.Labels
+		path += "&labels=" + url.QueryEscape(in.Labels)
 	}
-	return ghGet("%s", url), nil, nil
+	return ghGet("%s", path), nil, nil
 }
 
 func handleGetIssue(_ context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/issues/%d", in.Owner, in.Repo, in.Number), nil, nil
+	return ghGet("/repos/%s/%s/issues/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
 }
 
 func handleAddIssueComment(_ context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
-	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", in.Owner, in.Repo, in.Number),
+	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
 func handleListBranches(_ context.Context, _ *mcp.CallToolRequest, in branchesInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/branches?per_page=100", in.Owner, in.Repo), nil, nil
+	return ghGet("/repos/%s/%s/branches?per_page=100", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
 func handleGetCheckRuns(_ context.Context, _ *mcp.CallToolRequest, in checkRunsInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/commits/%s/check-runs", in.Owner, in.Repo, in.Ref), nil, nil
+	return ghGet("/repos/%s/%s/commits/%s/check-runs", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.PathEscape(in.Ref)), nil, nil
 }
 
 func handleGetWorkflowRuns(_ context.Context, _ *mcp.CallToolRequest, in workflowRunsInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/actions/runs?per_page=10", in.Owner, in.Repo), nil, nil
+	return ghGet("/repos/%s/%s/actions/runs?per_page=10", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
 // ── HTTP helpers ──
@@ -230,12 +238,12 @@ func ghPost(path string, payload map[string]any) *mcp.CallToolResult {
 }
 
 func doRequest(req *http.Request) *mcp.CallToolResult {
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return errResult("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap
 
 	if resp.StatusCode >= 400 {
 		return errResult("HTTP %d: %s", resp.StatusCode, string(body))

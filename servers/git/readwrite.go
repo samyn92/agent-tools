@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -134,14 +133,9 @@ func handleClone(_ context.Context, _ *mcp.CallToolRequest, in cloneInput) (*mcp
 	}
 	args = append(args, in.URL, target)
 
-	cmdLine := "$ git " + strings.Join(args, " ")
-	cmd := exec.CommandContext(context.Background(), gitBin, args...)
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return errResult("%s\nclone failed: %s\n%s", cmdLine, err, string(out)), nil, nil
-	}
-	return textResult(fmt.Sprintf("%s\nCloned %s to %s\n%s", cmdLine, in.URL, target, strings.TrimSpace(string(out)))), nil, nil
+	// Use gitWithTimeout for proper timeout (120s) instead of context.Background().
+	// Clone doesn't need a cwd (target dir doesn't exist yet), so pass empty.
+	return gitWithTimeout(networkTimeout, "", args...), nil, nil
 }
 
 func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPullInput) (*mcp.CallToolResult, any, error) {
@@ -163,21 +157,14 @@ func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPull
 		return gitNetwork(target, args...), nil, nil
 	}
 
-	// Clone
+	// Clone — use gitWithTimeout for proper timeout (120s) instead of context.Background()
 	args := []string{"clone"}
 	if in.Branch != "" {
 		args = append(args, "-b", in.Branch)
 	}
 	args = append(args, in.URL, target)
 
-	cmdLine := "$ git " + strings.Join(args, " ")
-	cmd := exec.CommandContext(context.Background(), gitBin, args...)
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return errResult("%s\nclone failed: %s\n%s", cmdLine, err, string(out)), nil, nil
-	}
-	return textResult(fmt.Sprintf("%s\nCloned %s to %s\n%s", cmdLine, in.URL, target, strings.TrimSpace(string(out)))), nil, nil
+	return gitWithTimeout(networkTimeout, "", args...), nil, nil
 }
 
 // resolveCloneTarget determines the target directory for a clone.

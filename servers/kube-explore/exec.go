@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -39,8 +40,15 @@ func handleExec(ctx context.Context, _ *mcp.CallToolRequest, input execInput) (*
 	podName := obj.GetName()
 	namespace := obj.GetNamespace()
 
-	output, err := execInPod(ctx, namespace, podName, input.Container, input.Command)
+	// Apply a 300s timeout to prevent runaway exec commands
+	execCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	defer cancel()
+
+	output, err := execInPod(execCtx, namespace, podName, input.Container, input.Command)
 	if err != nil {
+		if execCtx.Err() == context.DeadlineExceeded {
+			return errResult("Exec in %s/%s timed out after 300s\n%s", namespace, podName, output), nil, nil
+		}
 		return errResult("Exec in %s/%s failed: %v\n%s", namespace, podName, err, output), nil, nil
 	}
 

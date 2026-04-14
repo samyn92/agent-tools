@@ -174,12 +174,10 @@ func handleRun(_ context.Context, _ *mcp.CallToolRequest, in runInput) (*mcp.Cal
 	args := []string{"run", in.Name, "--image", in.Image, "--restart=Never"}
 	args = appendNamespace(args, in.Namespace)
 
-	// Default to rm=true (clean up after run)
-	if in.Rm || !in.Rm {
-		// Always attach and remove unless explicitly set to false
-		// In practice, for MCP we always want to wait for output
-		args = append(args, "--rm", "--attach")
-	}
+	// Always attach and clean up — MCP tools need to capture output.
+	// The rm field is kept for API compatibility but --rm is always applied
+	// since there's no interactive session to leave a pod running for.
+	args = append(args, "--rm", "--attach")
 
 	if in.Command != "" {
 		args = append(args, "--", "sh", "-c", in.Command)
