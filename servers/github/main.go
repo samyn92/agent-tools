@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
 )
 
 var (
@@ -40,6 +41,9 @@ var (
 )
 
 func main() {
+	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-github")
+	defer func() { shutdown(context.Background()) }()
+
 	apiBase = strings.TrimRight(or(os.Getenv("GITHUB_API_URL"), "https://api.github.com"), "/")
 	token = or(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
 	if token == "" {

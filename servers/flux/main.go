@@ -21,9 +21,13 @@ import (
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
 )
 
 func main() {
+	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-flux")
+	defer func() { shutdown(context.Background()) }()
+
 	fluxBin = resolveFlux()
 
 	mode := os.Getenv("MODE")

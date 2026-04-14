@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
 )
 
 var (
@@ -39,6 +40,9 @@ var (
 )
 
 func main() {
+	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-gitlab")
+	defer func() { shutdown(context.Background()) }()
+
 	glURL := strings.TrimRight(or(os.Getenv("GITLAB_URL"), "https://gitlab.com"), "/")
 	apiBase = glURL + "/api/v4"
 	token = os.Getenv("GITLAB_TOKEN")

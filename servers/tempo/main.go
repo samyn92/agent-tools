@@ -22,11 +22,15 @@ import (
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
 )
 
 var tempoURL string
 
 func main() {
+	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-tempo")
+	defer func() { shutdown(context.Background()) }()
+
 	tempoURL = strings.TrimRight(or(os.Getenv("TEMPO_URL"), "http://tempo.observability.svc.cluster.local:3200"), "/")
 
 	server := mcp.NewServer(
