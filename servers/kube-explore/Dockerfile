@@ -1,10 +1,11 @@
 FROM golang:1.26 AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY kube-explore/go.mod kube-explore/go.sum ./
+COPY pkg/otelutil/ /app/pkg/otelutil/
 RUN go mod download
-COPY *.go ./
+COPY kube-explore/*.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kube-explore .
 
 FROM scratch
 COPY --from=builder /app/kube-explore /bin/kube-explore
-COPY manifest.json /manifest.json
+COPY kube-explore/manifest.json /manifest.json

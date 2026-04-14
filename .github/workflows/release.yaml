@@ -173,7 +173,8 @@ jobs:
       - name: Build and push ${{ matrix.server }}-server
         uses: docker/build-push-action@v6
         with:
-          context: servers/${{ matrix.server }}
+          context: servers/
+          file: servers/${{ matrix.server }}/Dockerfile
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/agent-tools/${{ matrix.server }}-server:${{ steps.version.outputs.version }}
