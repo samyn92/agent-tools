@@ -1,7 +1,7 @@
 FROM golang:1.26 AS builder
 WORKDIR /app
 COPY github/go.mod github/go.sum ./
-COPY pkg/otelutil/ /app/pkg/otelutil/
+COPY pkg/otelutil/ /pkg/otelutil/
 RUN go mod download
 COPY github/*.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o mcp-github .

@@ -1,7 +1,7 @@
 FROM golang:1.26 AS builder
 WORKDIR /app
 COPY tempo/go.mod tempo/go.sum ./
-COPY pkg/otelutil/ /app/pkg/otelutil/
+COPY pkg/otelutil/ /pkg/otelutil/
 RUN go mod download
 COPY tempo/*.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o mcp-tempo .
