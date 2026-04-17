@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v0.8.0
-	github.com/samyn92/agent-tools/servers/pkg/otelutil v0.0.0
+	github.com/samyn92/agent-tools/servers/pkg/mcputil v0.0.0
 )
 
 require (
@@ -32,4 +32,4 @@ require (
 	google.golang.org/protobuf v1.36.5 // indirect
 )
 
-replace github.com/samyn92/agent-tools/servers/pkg/otelutil => ../pkg/otelutil
+replace github.com/samyn92/agent-tools/servers/pkg/mcputil => ../pkg/mcputil

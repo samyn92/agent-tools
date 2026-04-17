@@ -1,7 +1,7 @@
 FROM golang:1.26 AS builder
 WORKDIR /app
 COPY kube-explore/go.mod kube-explore/go.sum ./
-COPY pkg/otelutil/ /pkg/otelutil/
+COPY pkg/mcputil/ /pkg/mcputil/
 RUN go mod download
 COPY kube-explore/*.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kube-explore .

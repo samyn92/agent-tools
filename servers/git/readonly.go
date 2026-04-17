@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -37,19 +38,19 @@ type showInput struct {
 
 // ── Handlers ──
 
-func registerReadonlyTools(s *mcp.Server) {
-	add(s, "git_status", "Show the working tree status (modified, staged, untracked files).", handleStatus)
-	add(s, "git_diff", "Show changes between commits, commit and working tree, etc.", handleDiff)
-	add(s, "git_log", "Show commit logs. Returns recent commits with hash, author, date, and message.", handleLog)
-	add(s, "git_branch_list", "List all local and optionally remote branches.", handleBranchList)
-	add(s, "git_show", "Show the contents of a commit (diff + message).", handleShow)
+func registerReadonlyTools(s *mcputil.Server) {
+	mcputil.AddToolTo(s, "git_status", "Show the working tree status (modified, staged, untracked files).", handleStatus)
+	mcputil.AddToolTo(s, "git_diff", "Show changes between commits, commit and working tree, etc.", handleDiff)
+	mcputil.AddToolTo(s, "git_log", "Show commit logs. Returns recent commits with hash, author, date, and message.", handleLog)
+	mcputil.AddToolTo(s, "git_branch_list", "List all local and optionally remote branches.", handleBranchList)
+	mcputil.AddToolTo(s, "git_show", "Show the contents of a commit (diff + message).", handleShow)
 }
 
-func handleStatus(_ context.Context, _ *mcp.CallToolRequest, in statusInput) (*mcp.CallToolResult, any, error) {
-	return git(in.Cwd, "status", "--short", "--branch"), nil, nil
+func handleStatus(ctx context.Context, _ *mcp.CallToolRequest, in statusInput) (*mcp.CallToolResult, any, error) {
+	return git(ctx, in.Cwd, "status", "--short", "--branch"), nil, nil
 }
 
-func handleDiff(_ context.Context, _ *mcp.CallToolRequest, in diffInput) (*mcp.CallToolResult, any, error) {
+func handleDiff(ctx context.Context, _ *mcp.CallToolRequest, in diffInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"diff"}
 	if in.Staged {
 		args = append(args, "--cached")
@@ -57,10 +58,10 @@ func handleDiff(_ context.Context, _ *mcp.CallToolRequest, in diffInput) (*mcp.C
 	if in.Ref != "" {
 		args = append(args, in.Ref)
 	}
-	return git(in.Cwd, args...), nil, nil
+	return git(ctx, in.Cwd, args...), nil, nil
 }
 
-func handleLog(_ context.Context, _ *mcp.CallToolRequest, in logInput) (*mcp.CallToolResult, any, error) {
+func handleLog(ctx context.Context, _ *mcp.CallToolRequest, in logInput) (*mcp.CallToolResult, any, error) {
 	count := in.Count
 	if count <= 0 {
 		count = 20
@@ -71,17 +72,17 @@ func handleLog(_ context.Context, _ *mcp.CallToolRequest, in logInput) (*mcp.Cal
 	} else {
 		args = append(args, "--format=%h %ad %an: %s", "--date=short")
 	}
-	return git(in.Cwd, args...), nil, nil
+	return git(ctx, in.Cwd, args...), nil, nil
 }
 
-func handleBranchList(_ context.Context, _ *mcp.CallToolRequest, in branchListInput) (*mcp.CallToolResult, any, error) {
+func handleBranchList(ctx context.Context, _ *mcp.CallToolRequest, in branchListInput) (*mcp.CallToolResult, any, error) {
 	if in.All {
-		return git(in.Cwd, "branch", "-a", "--format=%(refname:short) %(objectname:short) %(subject)"), nil, nil
+		return git(ctx, in.Cwd, "branch", "-a", "--format=%(refname:short) %(objectname:short) %(subject)"), nil, nil
 	}
-	return git(in.Cwd, "branch", "--format=%(refname:short) %(objectname:short) %(subject)"), nil, nil
+	return git(ctx, in.Cwd, "branch", "--format=%(refname:short) %(objectname:short) %(subject)"), nil, nil
 }
 
-func handleShow(_ context.Context, _ *mcp.CallToolRequest, in showInput) (*mcp.CallToolResult, any, error) {
+func handleShow(ctx context.Context, _ *mcp.CallToolRequest, in showInput) (*mcp.CallToolResult, any, error) {
 	ref := or(in.Ref, "HEAD")
-	return git(in.Cwd, "show", ref, "--stat", "--format=commit %H%nAuthor: %an <%ae>%nDate:   %ad%n%n    %s%n%n    %b"), nil, nil
+	return git(ctx, in.Cwd, "show", ref, "--stat", "--format=commit %H%nAuthor: %an <%ae>%nDate:   %ad%n%n    %s%n%n    %b"), nil, nil
 }

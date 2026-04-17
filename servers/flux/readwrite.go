@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -38,9 +39,9 @@ type deleteInput struct {
 
 // ── Handlers ──
 
-func handleReconcile(_ context.Context, _ *mcp.CallToolRequest, in reconcileInput) (*mcp.CallToolResult, any, error) {
+func handleReconcile(ctx context.Context, _ *mcp.CallToolRequest, in reconcileInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	args := append([]string{"reconcile"}, strings.Fields(in.Resource)...)
 	args = append(args, in.Name)
@@ -48,37 +49,37 @@ func handleReconcile(_ context.Context, _ *mcp.CallToolRequest, in reconcileInpu
 	if in.WithSource {
 		args = append(args, "--with-source")
 	}
-	return fluxWithTimeout(120*time.Second, args...), nil, nil
+	return fluxWithTimeout(ctx, 120*time.Second, args...), nil, nil
 }
 
-func handleSuspend(_ context.Context, _ *mcp.CallToolRequest, in suspendInput) (*mcp.CallToolResult, any, error) {
+func handleSuspend(ctx context.Context, _ *mcp.CallToolRequest, in suspendInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	args := append([]string{"suspend"}, strings.Fields(in.Resource)...)
 	args = append(args, in.Name)
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleResume(_ context.Context, _ *mcp.CallToolRequest, in resumeInput) (*mcp.CallToolResult, any, error) {
+func handleResume(ctx context.Context, _ *mcp.CallToolRequest, in resumeInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	args := append([]string{"resume"}, strings.Fields(in.Resource)...)
 	args = append(args, in.Name)
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleDelete(_ context.Context, _ *mcp.CallToolRequest, in deleteInput) (*mcp.CallToolResult, any, error) {
+func handleDelete(ctx context.Context, _ *mcp.CallToolRequest, in deleteInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	args := append([]string{"delete"}, strings.Fields(in.Resource)...)
 	args = append(args, in.Name)
 	args = appendNamespace(args, in.Namespace)
 	// Always silent — MCP has no interactive prompt
 	args = append(args, "--silent")
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }

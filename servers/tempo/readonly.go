@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ─────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ type compareInput struct {
 
 // ── Handlers ────────────────────────────────────────────────────────
 
-func handleSearch(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
+func handleSearch(ctx context.Context, _ *mcp.CallToolRequest, in searchInput) (*mcp.CallToolResult, any, error) {
 	// Build TraceQL query
 	var query string
 	if in.Agent != "" {
@@ -66,9 +67,9 @@ func handleSearch(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*m
 
 	start, end := parseTimeRange(in.Since)
 
-	resp, err := tempoSearch(query, limit, start, end)
+	resp, err := tempoSearch(ctx, query, limit, start, end)
 	if err != nil {
-		return errResult("tempo search: %v", err), nil, nil
+		return mcputil.ErrResult("tempo search: %v", err), nil, nil
 	}
 
 	// For each trace, fetch the full trace to extract detailed metadata.
@@ -128,24 +129,24 @@ func handleSearch(_ context.Context, _ *mcp.CallToolRequest, in searchInput) (*m
 	return jsonResult(result), nil, nil
 }
 
-func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
+func handleGet(ctx context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
 	if in.TraceID == "" {
-		return errResult("traceId is required"), nil, nil
+		return mcputil.ErrResult("traceId is required"), nil, nil
 	}
 
-	trace, err := tempoGetTrace(in.TraceID)
+	trace, err := tempoGetTrace(ctx, in.TraceID)
 	if err != nil {
-		return errResult("fetching trace: %v", err), nil, nil
+		return mcputil.ErrResult("fetching trace: %v", err), nil, nil
 	}
 
 	spans := extractSpans(trace)
 	if len(spans) == 0 {
-		return errResult("trace %s has no spans", in.TraceID), nil, nil
+		return mcputil.ErrResult("trace %s has no spans", in.TraceID), nil, nil
 	}
 
 	root := findRootSpan(spans)
 	if root == nil {
-		return errResult("no root span found in trace"), nil, nil
+		return mcputil.ErrResult("no root span found in trace"), nil, nil
 	}
 
 	detail := traceDetail{
@@ -243,21 +244,21 @@ func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.Cal
 	return jsonResult(detail), nil, nil
 }
 
-func handleAgentStats(_ context.Context, _ *mcp.CallToolRequest, in agentStatsInput) (*mcp.CallToolResult, any, error) {
+func handleAgentStats(ctx context.Context, _ *mcp.CallToolRequest, in agentStatsInput) (*mcp.CallToolResult, any, error) {
 	if in.Agent == "" {
-		return errResult("agent name is required"), nil, nil
+		return mcputil.ErrResult("agent name is required"), nil, nil
 	}
 
 	query := fmt.Sprintf(`{ resource.agent.name = "%s" } | select(resource.agent.name, resource.agent.mode)`, in.Agent)
 	start, end := parseTimeRange(in.Since)
 
-	resp, err := tempoSearch(query, 200, start, end)
+	resp, err := tempoSearch(ctx, query, 200, start, end)
 	if err != nil {
-		return errResult("tempo search: %v", err), nil, nil
+		return mcputil.ErrResult("tempo search: %v", err), nil, nil
 	}
 
 	if len(resp.Traces) == 0 {
-		return errResult("no traces found for agent %q in the last %s", in.Agent, or(in.Since, "24h")), nil, nil
+		return mcputil.ErrResult("no traces found for agent %q in the last %s", in.Agent, or(in.Since, "24h")), nil, nil
 	}
 
 	// Fetch all traces to compute detailed stats
@@ -271,7 +272,7 @@ func handleAgentStats(_ context.Context, _ *mcp.CallToolRequest, in agentStatsIn
 	modelCounts := map[string]int{}
 
 	for _, t := range resp.Traces {
-		trace, err := tempoGetTrace(t.TraceID)
+		trace, err := tempoGetTrace(ctx, t.TraceID)
 		if err != nil {
 			continue
 		}
@@ -442,7 +443,7 @@ func handleAgentStats(_ context.Context, _ *mcp.CallToolRequest, in agentStatsIn
 	return jsonResult(result), nil, nil
 }
 
-func handleSlowTools(_ context.Context, _ *mcp.CallToolRequest, in slowToolsInput) (*mcp.CallToolResult, any, error) {
+func handleSlowTools(ctx context.Context, _ *mcp.CallToolRequest, in slowToolsInput) (*mcp.CallToolResult, any, error) {
 	var query string
 	if in.Agent != "" {
 		query = fmt.Sprintf(`{ resource.agent.name = "%s" } | select(resource.agent.name)`, in.Agent)
@@ -452,9 +453,9 @@ func handleSlowTools(_ context.Context, _ *mcp.CallToolRequest, in slowToolsInpu
 
 	start, end := parseTimeRange(in.Since)
 
-	resp, err := tempoSearch(query, 100, start, end)
+	resp, err := tempoSearch(ctx, query, 100, start, end)
 	if err != nil {
-		return errResult("tempo search: %v", err), nil, nil
+		return mcputil.ErrResult("tempo search: %v", err), nil, nil
 	}
 
 	limit := in.Limit
@@ -465,7 +466,7 @@ func handleSlowTools(_ context.Context, _ *mcp.CallToolRequest, in slowToolsInpu
 	var entries []slowToolEntry
 
 	for _, t := range resp.Traces {
-		trace, err := tempoGetTrace(t.TraceID)
+		trace, err := tempoGetTrace(ctx, t.TraceID)
 		if err != nil {
 			continue
 		}
@@ -520,7 +521,7 @@ func handleSlowTools(_ context.Context, _ *mcp.CallToolRequest, in slowToolsInpu
 	return jsonResult(result), nil, nil
 }
 
-func handleErrors(_ context.Context, _ *mcp.CallToolRequest, in errorsInput) (*mcp.CallToolResult, any, error) {
+func handleErrors(ctx context.Context, _ *mcp.CallToolRequest, in errorsInput) (*mcp.CallToolResult, any, error) {
 	var query string
 	if in.Agent != "" {
 		query = fmt.Sprintf(`{ resource.agent.name = "%s" && status = error } | select(resource.agent.name)`, in.Agent)
@@ -530,7 +531,7 @@ func handleErrors(_ context.Context, _ *mcp.CallToolRequest, in errorsInput) (*m
 
 	start, end := parseTimeRange(in.Since)
 
-	resp, err := tempoSearch(query, 200, start, end)
+	resp, err := tempoSearch(ctx, query, 200, start, end)
 	if err != nil {
 		// Fallback: if status=error TraceQL not supported, search all and filter
 		if in.Agent != "" {
@@ -538,9 +539,9 @@ func handleErrors(_ context.Context, _ *mcp.CallToolRequest, in errorsInput) (*m
 		} else {
 			query = `{ resource.agent.name =~ ".+" } | select(resource.agent.name)`
 		}
-		resp, err = tempoSearch(query, 200, start, end)
+		resp, err = tempoSearch(ctx, query, 200, start, end)
 		if err != nil {
-			return errResult("tempo search: %v", err), nil, nil
+			return mcputil.ErrResult("tempo search: %v", err), nil, nil
 		}
 	}
 
@@ -554,7 +555,7 @@ func handleErrors(_ context.Context, _ *mcp.CallToolRequest, in errorsInput) (*m
 	}
 
 	for _, t := range resp.Traces {
-		trace, err := tempoGetTrace(t.TraceID)
+		trace, err := tempoGetTrace(ctx, t.TraceID)
 		if err != nil {
 			continue
 		}
@@ -616,18 +617,18 @@ func handleErrors(_ context.Context, _ *mcp.CallToolRequest, in errorsInput) (*m
 	return jsonResult(result), nil, nil
 }
 
-func handleCompare(_ context.Context, _ *mcp.CallToolRequest, in compareInput) (*mcp.CallToolResult, any, error) {
+func handleCompare(ctx context.Context, _ *mcp.CallToolRequest, in compareInput) (*mcp.CallToolResult, any, error) {
 	if in.TraceA == "" || in.TraceB == "" {
-		return errResult("both traceA and traceB are required"), nil, nil
+		return mcputil.ErrResult("both traceA and traceB are required"), nil, nil
 	}
 
-	traceA, err := tempoGetTrace(in.TraceA)
+	traceA, err := tempoGetTrace(ctx, in.TraceA)
 	if err != nil {
-		return errResult("fetching trace A: %v", err), nil, nil
+		return mcputil.ErrResult("fetching trace A: %v", err), nil, nil
 	}
-	traceB, err := tempoGetTrace(in.TraceB)
+	traceB, err := tempoGetTrace(ctx, in.TraceB)
 	if err != nil {
-		return errResult("fetching trace B: %v", err), nil, nil
+		return mcputil.ErrResult("fetching trace B: %v", err), nil, nil
 	}
 
 	briefA := buildBrief(in.TraceA, traceA)

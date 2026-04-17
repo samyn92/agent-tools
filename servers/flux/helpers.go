@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // fluxBin is the resolved path to the flux binary.
@@ -31,52 +32,36 @@ func resolveFlux() string {
 	return "flux"
 }
 
-// add registers a tool with the MCP server using typed input.
-func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc}, h)
-}
-
 // flux runs the flux CLI with the given arguments and returns the result.
-func flux(args ...string) *mcp.CallToolResult {
-	return fluxWithTimeout(30*time.Second, args...)
+// The context carries the parent span from the tool handler for trace correlation.
+func flux(ctx context.Context, args ...string) *mcp.CallToolResult {
+	return fluxWithTimeout(ctx, 30*time.Second, args...)
 }
 
 // fluxWithTimeout runs the flux CLI with the given arguments and a timeout.
-func fluxWithTimeout(timeout time.Duration, args ...string) *mcp.CallToolResult {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+func fluxWithTimeout(ctx context.Context, timeout time.Duration, args ...string) *mcp.CallToolResult {
+	r := mcputil.TracedExecWithTimeout(ctx, timeout, fluxBin, args...)
 
 	cmdLine := "$ flux " + strings.Join(args, " ")
 
-	cmd := exec.CommandContext(ctx, fluxBin, args...)
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if ctx.Err() == context.DeadlineExceeded {
+	if r.TimedOut {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\ntimed out after %s\n%s", cmdLine, timeout, string(out))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\ntimed out after %s\n%s", cmdLine, timeout, r.Output)}},
 			IsError: true,
 		}
 	}
-	if err != nil {
+	if r.Err != nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\n%s\n%s", cmdLine, err, strings.TrimSpace(string(out)))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\n%s\n%s", cmdLine, r.Err, r.Output)}},
 			IsError: true,
 		}
 	}
-	text := strings.TrimSpace(string(out))
-	if text == "" {
-		text = "(no output)"
+	output := r.Output
+	if output == "" {
+		output = "(no output)"
 	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + text}},
-	}
-}
-
-// errResult creates an error result with formatting.
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + output}},
 	}
 }
 

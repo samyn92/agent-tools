@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,7 +26,7 @@ type findInput struct {
 
 func handleFind(ctx context.Context, _ *mcp.CallToolRequest, input findInput) (*mcp.CallToolResult, any, error) {
 	if input.Query == "" && input.Status == "" {
-		return errResult("Either 'query' or 'status' must be provided"), nil, nil
+		return mcputil.ErrResult("Either 'query' or 'status' must be provided"), nil, nil
 	}
 
 	maxResults := 25
@@ -36,7 +37,7 @@ func handleFind(ctx context.Context, _ *mcp.CallToolRequest, input findInput) (*
 		if info, ok := resolveKind(input.Kind); ok {
 			searchGVRs = []resourceInfo{info}
 		} else {
-			return errResult("Unknown resource kind: %s", input.Kind), nil, nil
+			return mcputil.ErrResult("Unknown resource kind: %s", input.Kind), nil, nil
 		}
 	} else {
 		searchGVRs = defaultSearchGVRs

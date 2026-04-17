@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -74,9 +76,9 @@ type versionInput struct{}
 
 // ── Handlers ──
 
-func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
+func handleGet(ctx context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required (e.g. all, helmreleases, kustomizations, sources git)"), nil, nil
+		return mcputil.ErrResult("resource is required (e.g. all, helmreleases, kustomizations, sources git)"), nil, nil
 	}
 	// flux get supports space-separated subcommands like "sources git"
 	args := append([]string{"get"}, strings.Fields(in.Resource)...)
@@ -84,24 +86,24 @@ func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.Cal
 		args = append(args, in.Name)
 	}
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleCheck(_ context.Context, _ *mcp.CallToolRequest, in checkInput) (*mcp.CallToolResult, any, error) {
+func handleCheck(ctx context.Context, _ *mcp.CallToolRequest, in checkInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"check"}
 	if in.Pre {
 		args = append(args, "--pre")
 	}
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleStats(_ context.Context, _ *mcp.CallToolRequest, in statsInput) (*mcp.CallToolResult, any, error) {
+func handleStats(ctx context.Context, _ *mcp.CallToolRequest, in statsInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"stats"}
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleLogs(_ context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.CallToolResult, any, error) {
+func handleLogs(ctx context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"logs"}
 	if in.Namespace != "" {
 		args = appendNamespace(args, in.Namespace)
@@ -123,10 +125,10 @@ func handleLogs(_ context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.C
 	if in.Since != "" {
 		args = append(args, "--since", in.Since)
 	}
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleEvents(_ context.Context, _ *mcp.CallToolRequest, in eventsInput) (*mcp.CallToolResult, any, error) {
+func handleEvents(ctx context.Context, _ *mcp.CallToolRequest, in eventsInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"events"}
 	args = appendNamespace(args, in.Namespace)
 	if in.For != "" {
@@ -135,45 +137,45 @@ func handleEvents(_ context.Context, _ *mcp.CallToolRequest, in eventsInput) (*m
 	if in.Types != "" {
 		args = append(args, "--types", in.Types)
 	}
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleTrace(_ context.Context, _ *mcp.CallToolRequest, in traceInput) (*mcp.CallToolResult, any, error) {
+func handleTrace(ctx context.Context, _ *mcp.CallToolRequest, in traceInput) (*mcp.CallToolResult, any, error) {
 	if in.Kind == "" || in.Name == "" {
-		return errResult("kind and name are required"), nil, nil
+		return mcputil.ErrResult("kind and name are required"), nil, nil
 	}
 	args := []string{"trace", in.Kind, in.Name}
 	args = appendNamespace(args, in.Namespace)
 	if in.APIVersion != "" {
 		args = append(args, "--api-version", in.APIVersion)
 	}
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleTree(_ context.Context, _ *mcp.CallToolRequest, in treeInput) (*mcp.CallToolResult, any, error) {
+func handleTree(ctx context.Context, _ *mcp.CallToolRequest, in treeInput) (*mcp.CallToolResult, any, error) {
 	if in.Name == "" {
-		return errResult("name is required"), nil, nil
+		return mcputil.ErrResult("name is required"), nil, nil
 	}
 	args := []string{"tree", "kustomization", in.Name}
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleDiff(_ context.Context, _ *mcp.CallToolRequest, in diffInput) (*mcp.CallToolResult, any, error) {
+func handleDiff(ctx context.Context, _ *mcp.CallToolRequest, in diffInput) (*mcp.CallToolResult, any, error) {
 	if in.Name == "" {
-		return errResult("name is required"), nil, nil
+		return mcputil.ErrResult("name is required"), nil, nil
 	}
 	args := []string{"diff", "kustomization", in.Name}
 	args = appendNamespace(args, in.Namespace)
 	if in.Path != "" {
 		args = append(args, "--path", in.Path)
 	}
-	return fluxWithTimeout(60_000_000_000, args...), nil, nil // 60s for diff
+	return fluxWithTimeout(ctx, 60*time.Second, args...), nil, nil
 }
 
-func handleExport(_ context.Context, _ *mcp.CallToolRequest, in exportInput) (*mcp.CallToolResult, any, error) {
+func handleExport(ctx context.Context, _ *mcp.CallToolRequest, in exportInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required (e.g. helmrelease, kustomization, source git)"), nil, nil
+		return mcputil.ErrResult("resource is required (e.g. helmrelease, kustomization, source git)"), nil, nil
 	}
 	args := append([]string{"export"}, strings.Fields(in.Resource)...)
 	if in.Name != "" {
@@ -183,18 +185,18 @@ func handleExport(_ context.Context, _ *mcp.CallToolRequest, in exportInput) (*m
 	if in.All {
 		args = append(args, "--all")
 	}
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleDebug(_ context.Context, _ *mcp.CallToolRequest, in debugInput) (*mcp.CallToolResult, any, error) {
+func handleDebug(ctx context.Context, _ *mcp.CallToolRequest, in debugInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	args := []string{"debug", in.Resource, in.Name}
 	args = appendNamespace(args, in.Namespace)
-	return flux(args...), nil, nil
+	return flux(ctx, args...), nil, nil
 }
 
-func handleVersion(_ context.Context, _ *mcp.CallToolRequest, _ versionInput) (*mcp.CallToolResult, any, error) {
-	return flux("version"), nil, nil
+func handleVersion(ctx context.Context, _ *mcp.CallToolRequest, _ versionInput) (*mcp.CallToolResult, any, error) {
+	return flux(ctx, "version"), nil, nil
 }

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -81,31 +82,12 @@ func initClients() {
 // MCP result helpers
 // ====================================================================
 
-func addTool[In any](s *mcp.Server, name, description string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: description}, h)
-}
-
-func textResult(text string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: text}},
-	}
-}
-
 func jsonMarshalResult(v any) *mcp.CallToolResult {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return errResult("json marshal error: %v", err)
+		return mcputil.ErrResult("json marshal error: %v", err)
 	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
-	}
-}
-
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
-	}
+	return mcputil.TextResult(string(data))
 }
 
 // ====================================================================

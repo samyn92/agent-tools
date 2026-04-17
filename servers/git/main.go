@@ -15,18 +15,22 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
+var log *slog.Logger
+
 func main() {
-	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-git")
+	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-git")
 	defer func() { shutdown(context.Background()) }()
+
+	log = mcputil.Logger()
 
 	gitBin = resolveGit()
 	workspace = os.Getenv("WORKSPACE")
@@ -39,11 +43,7 @@ func main() {
 		mode = "readonly"
 	}
 
-	serverName := "git-" + mode
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: serverName, Version: "0.2.0"},
-		nil,
-	)
+	server := mcputil.NewServer("git-"+mode, "0.2.0", mcputil.WithMode(mode))
 
 	// ── Readonly tools (always registered) ──
 	registerReadonlyTools(server)
@@ -53,10 +53,14 @@ func main() {
 		registerReadwriteTools(server)
 	}
 
+	mcputil.Ready("mcp-tool-git")
+	defer mcputil.NotReady("mcp-tool-git")
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
+		log.ErrorContext(ctx, "server exited with error", "error", err)
+		os.Exit(1)
 	}
 }

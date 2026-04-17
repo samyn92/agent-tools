@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ type applyInput struct {
 
 func handleApply(ctx context.Context, _ *mcp.CallToolRequest, input applyInput) (*mcp.CallToolResult, any, error) {
 	if input.YAML == "" {
-		return errResult("'yaml' is required"), nil, nil
+		return mcputil.ErrResult("'yaml' is required"), nil, nil
 	}
 
 	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(input.YAML), 4096)
@@ -40,7 +41,7 @@ func handleApply(ctx context.Context, _ *mcp.CallToolRequest, input applyInput) 
 			if err == io.EOF {
 				break
 			}
-			return errResult("Error parsing manifest: %v", err), nil, nil
+			return mcputil.ErrResult("Error parsing manifest: %v", err), nil, nil
 		}
 		if rawObj == nil {
 			continue
@@ -51,7 +52,7 @@ func handleApply(ctx context.Context, _ *mcp.CallToolRequest, input applyInput) 
 		gvk := obj.GroupVersionKind()
 		mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if err != nil {
-			return errResult("Cannot resolve resource mapping for %s: %v", gvk.String(), err), nil, nil
+			return mcputil.ErrResult("Cannot resolve resource mapping for %s: %v", gvk.String(), err), nil, nil
 		}
 
 		ns := obj.GetNamespace()
@@ -72,21 +73,21 @@ func handleApply(ctx context.Context, _ *mcp.CallToolRequest, input applyInput) 
 
 		data, err := json.Marshal(obj)
 		if err != nil {
-			return errResult("Error marshaling: %v", err), nil, nil
+			return mcputil.ErrResult("Error marshaling: %v", err), nil, nil
 		}
 
 		result, err := res.Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 			FieldManager: "kube-explore-mcp-tool",
 		})
 		if err != nil {
-			return errResult("Error applying %s/%s: %v", obj.GetKind(), obj.GetName(), err), nil, nil
+			return mcputil.ErrResult("Error applying %s/%s: %v", obj.GetKind(), obj.GetName(), err), nil, nil
 		}
 
 		results = append(results, fmt.Sprintf("%s/%s configured", result.GetKind(), result.GetName()))
 	}
 
 	if len(results) == 0 {
-		return errResult("No resources found in manifest"), nil, nil
+		return mcputil.ErrResult("No resources found in manifest"), nil, nil
 	}
-	return textResult(strings.Join(results, "\n")), nil, nil
+	return mcputil.TextResult(strings.Join(results, "\n")), nil, nil
 }

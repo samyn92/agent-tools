@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 type execInput struct {
@@ -22,19 +23,19 @@ type execInput struct {
 
 func handleExec(ctx context.Context, _ *mcp.CallToolRequest, input execInput) (*mcp.CallToolResult, any, error) {
 	if input.Pod == "" {
-		return errResult("'pod' is required"), nil, nil
+		return mcputil.ErrResult("'pod' is required"), nil, nil
 	}
 	if input.Command == "" {
-		return errResult("'command' is required"), nil, nil
+		return mcputil.ErrResult("'command' is required"), nil, nil
 	}
 
 	// Fuzzy-resolve the pod
 	obj, kind, err := fuzzyFindOne(ctx, input.Pod, "Pod", input.Namespace)
 	if err != nil {
-		return errResult("Pod not found: %v", err), nil, nil
+		return mcputil.ErrResult("Pod not found: %v", err), nil, nil
 	}
 	if kind != "Pod" {
-		return errResult("Found %s/%s but expected a Pod", kind, obj.GetName()), nil, nil
+		return mcputil.ErrResult("Found %s/%s but expected a Pod", kind, obj.GetName()), nil, nil
 	}
 
 	podName := obj.GetName()
@@ -47,10 +48,10 @@ func handleExec(ctx context.Context, _ *mcp.CallToolRequest, input execInput) (*
 	output, err := execInPod(execCtx, namespace, podName, input.Container, input.Command)
 	if err != nil {
 		if execCtx.Err() == context.DeadlineExceeded {
-			return errResult("Exec in %s/%s timed out after 300s\n%s", namespace, podName, output), nil, nil
+			return mcputil.ErrResult("Exec in %s/%s timed out after 300s\n%s", namespace, podName, output), nil, nil
 		}
-		return errResult("Exec in %s/%s failed: %v\n%s", namespace, podName, err, output), nil, nil
+		return mcputil.ErrResult("Exec in %s/%s failed: %v\n%s", namespace, podName, err, output), nil, nil
 	}
 
-	return textResult(output), nil, nil
+	return mcputil.TextResult(output), nil, nil
 }

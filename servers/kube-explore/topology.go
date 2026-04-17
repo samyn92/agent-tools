@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,13 +28,13 @@ type topologyInput struct {
 
 func handleTopology(ctx context.Context, _ *mcp.CallToolRequest, input topologyInput) (*mcp.CallToolResult, any, error) {
 	if input.Name == "" {
-		return errResult("'name' is required"), nil, nil
+		return mcputil.ErrResult("'name' is required"), nil, nil
 	}
 
 	// Find the resource
 	obj, kind, err := fuzzyFindOne(ctx, input.Name, input.Kind, input.Namespace)
 	if err != nil {
-		return errResult("Resource not found: %v", err), nil, nil
+		return mcputil.ErrResult("Resource not found: %v", err), nil, nil
 	}
 
 	// Walk up to the root owner (e.g. Pod -> ReplicaSet -> Deployment)

@@ -25,31 +25,37 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
+var log *slog.Logger
+
 func main() {
-	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-kube-explore")
+	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-kube-explore")
 	defer func() { shutdown(context.Background()) }()
+
+	log = mcputil.Logger()
 
 	initClients()
 
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: "kube-explore", Version: "0.1.0"},
-		nil,
-	)
+	mode := os.Getenv("MODE")
+	if mode == "" {
+		mode = "readonly"
+	}
+
+	server := mcputil.NewServer("kube-explore-"+mode, "0.1.0", mcputil.WithMode(mode))
 
 	// ============================================================
 	// Intent-based smart tools (the reason this binary exists)
 	// ============================================================
 
-	addTool(server, "kube_find",
+	mcputil.AddToolTo(server, "kube_find",
 		"Fuzzy search across ALL namespaces and ALL resource types. "+
 			"Matches against name, labels, annotations, and status conditions. "+
 			"Accepts partial names, label fragments, and status keywords "+
@@ -58,7 +64,7 @@ func main() {
 			"and relevance score. One call replaces 3-8 kubectl calls.",
 		handleFind)
 
-	addTool(server, "kube_health",
+	mcputil.AddToolTo(server, "kube_health",
 		"Full cluster health snapshot in ONE call. Returns: unhealthy pods, "+
 			"pending PVCs, failed jobs (last 24h), recent error events (last 30m), "+
 			"node conditions, and resource pressure warnings. "+
@@ -66,7 +72,7 @@ func main() {
 			"One call replaces 5-10 kubectl calls across multiple resource types.",
 		handleHealth)
 
-	addTool(server, "kube_inspect",
+	mcputil.AddToolTo(server, "kube_inspect",
 		"Deep inspection of a single resource. Returns: full spec, status, "+
 			"conditions, events, logs (if pod/job), owner chain "+
 			"(Pod->ReplicaSet->Deployment), and related resources "+
@@ -75,7 +81,7 @@ func main() {
 			"One call replaces 3-4 kubectl calls (get + describe + logs + events).",
 		handleInspect)
 
-	addTool(server, "kube_topology",
+	mcputil.AddToolTo(server, "kube_topology",
 		"Relationship graph for a workload. Shows: "+
 			"Deployment -> ReplicaSet -> Pods, plus network (Services, Ingresses), "+
 			"storage (PVCs), and config (ConfigMaps, Secrets) references. "+
@@ -83,13 +89,13 @@ func main() {
 			"One call replaces 5+ kubectl calls traversing owner references manually.",
 		handleTopology)
 
-	addTool(server, "kube_diff",
+	mcputil.AddToolTo(server, "kube_diff",
 		"Compare desired vs live state. Provide an inline YAML manifest as "+
 			"the desired source and see field-level structural diff against "+
 			"the live cluster state. Useful for drift detection.",
 		handleDiff)
 
-	addTool(server, "kube_logs",
+	mcputil.AddToolTo(server, "kube_logs",
 		"Enhanced pod log fetching. Auto-detects crashlooping containers "+
 			"and fetches both previous + current logs. Highlights error/panic/fatal "+
 			"lines. Supports fuzzy pod name resolution — no need to know the "+
@@ -100,27 +106,26 @@ func main() {
 	// Mutating / exec tools (only in readwrite mode)
 	// ============================================================
 
-	mode := os.Getenv("MODE")
-	if mode == "" {
-		mode = "readonly"
-	}
-
 	if mode == "readwrite" {
-		addTool(server, "kube_exec",
+		mcputil.AddToolTo(server, "kube_exec",
 			"Execute a command in a pod. Enhanced: resolves fuzzy pod names first, "+
 				"so you don't need the exact pod name or namespace.",
-			handleExec)
+			handleExec, mcputil.WithInputOutput())
 
-		addTool(server, "kube_apply",
+		mcputil.AddToolTo(server, "kube_apply",
 			"Apply a YAML or JSON manifest using server-side apply. "+
 				"Creates or updates resources. Supports multi-document YAML.",
-			handleApply)
+			handleApply, mcputil.WithInputOutput())
 	}
+
+	mcputil.Ready("mcp-tool-kube-explore")
+	defer mcputil.NotReady("mcp-tool-kube-explore")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
+		log.ErrorContext(ctx, "server exited with error", "error", err)
+		os.Exit(1)
 	}
 }

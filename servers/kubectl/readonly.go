@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -59,9 +60,9 @@ type explainInput struct {
 
 // ── Handlers ──
 
-func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
+func handleGet(ctx context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required"), nil, nil
+		return mcputil.ErrResult("resource is required"), nil, nil
 	}
 	args := []string{"get", in.Resource}
 	if in.Name != "" {
@@ -76,12 +77,12 @@ func handleGet(_ context.Context, _ *mcp.CallToolRequest, in getInput) (*mcp.Cal
 		output = "wide"
 	}
 	args = append(args, "-o", output)
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleDescribe(_ context.Context, _ *mcp.CallToolRequest, in describeInput) (*mcp.CallToolResult, any, error) {
+func handleDescribe(ctx context.Context, _ *mcp.CallToolRequest, in describeInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required"), nil, nil
+		return mcputil.ErrResult("resource is required"), nil, nil
 	}
 	args := []string{"describe", in.Resource}
 	if in.Name != "" {
@@ -91,12 +92,12 @@ func handleDescribe(_ context.Context, _ *mcp.CallToolRequest, in describeInput)
 	if in.Selector != "" {
 		args = append(args, "-l", in.Selector)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleLogs(_ context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.CallToolResult, any, error) {
+func handleLogs(ctx context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.CallToolResult, any, error) {
 	if in.Pod == "" {
-		return errResult("pod is required"), nil, nil
+		return mcputil.ErrResult("pod is required"), nil, nil
 	}
 	args := []string{"logs", in.Pod}
 	args = appendNamespace(args, in.Namespace)
@@ -114,12 +115,12 @@ func handleLogs(_ context.Context, _ *mcp.CallToolRequest, in logsInput) (*mcp.C
 	if in.Previous {
 		args = append(args, "--previous")
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleTop(_ context.Context, _ *mcp.CallToolRequest, in topInput) (*mcp.CallToolResult, any, error) {
+func handleTop(ctx context.Context, _ *mcp.CallToolRequest, in topInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required (pods or nodes)"), nil, nil
+		return mcputil.ErrResult("resource is required (pods or nodes)"), nil, nil
 	}
 	args := []string{"top", in.Resource}
 	if in.Name != "" {
@@ -132,10 +133,10 @@ func handleTop(_ context.Context, _ *mcp.CallToolRequest, in topInput) (*mcp.Cal
 	if in.Sort != "" {
 		args = append(args, "--sort-by", in.Sort)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleEvents(_ context.Context, _ *mcp.CallToolRequest, in eventsInput) (*mcp.CallToolResult, any, error) {
+func handleEvents(ctx context.Context, _ *mcp.CallToolRequest, in eventsInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"events"}
 	args = appendNamespace(args, in.Namespace)
 	if in.For != "" {
@@ -144,10 +145,10 @@ func handleEvents(_ context.Context, _ *mcp.CallToolRequest, in eventsInput) (*m
 	if in.Types != "" {
 		args = append(args, "--types", in.Types)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleAPIResources(_ context.Context, _ *mcp.CallToolRequest, in apiResourcesInput) (*mcp.CallToolResult, any, error) {
+func handleAPIResources(ctx context.Context, _ *mcp.CallToolRequest, in apiResourcesInput) (*mcp.CallToolResult, any, error) {
 	args := []string{"api-resources"}
 	if in.Namespaced != nil {
 		args = append(args, fmt.Sprintf("--namespaced=%t", *in.Namespaced))
@@ -155,14 +156,14 @@ func handleAPIResources(_ context.Context, _ *mcp.CallToolRequest, in apiResourc
 	if in.Verbs != "" {
 		args = append(args, "--verbs", in.Verbs)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleExplain(_ context.Context, _ *mcp.CallToolRequest, in explainInput) (*mcp.CallToolResult, any, error) {
+func handleExplain(ctx context.Context, _ *mcp.CallToolRequest, in explainInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required"), nil, nil
+		return mcputil.ErrResult("resource is required"), nil, nil
 	}
-	return kube("explain", in.Resource, "--recursive=false"), nil, nil
+	return kube(ctx, "explain", in.Resource, "--recursive=false"), nil, nil
 }
 
 // ── Helpers ──

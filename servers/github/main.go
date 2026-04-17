@@ -20,59 +20,60 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 var (
-	apiBase    string
-	token      string
-	httpClient = &http.Client{Timeout: 30 * time.Second}
+	apiBase string
+	token   string
+	log     *slog.Logger
 )
 
 func main() {
-	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-github")
+	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-github")
 	defer func() { shutdown(context.Background()) }()
+
+	log = mcputil.Logger()
 
 	apiBase = strings.TrimRight(or(os.Getenv("GITHUB_API_URL"), "https://api.github.com"), "/")
 	token = or(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
 	if token == "" {
-		log.Fatal("GITHUB_TOKEN or GH_TOKEN environment variable is required")
+		log.Error("GITHUB_TOKEN or GH_TOKEN environment variable is required")
+		os.Exit(1)
 	}
 
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: "github-tools", Version: "0.1.0"},
-		nil,
-	)
+	server := mcputil.NewServer("github-tools", "0.1.0")
 
-	add(server, "github_get_repo", "Get repository info (description, stars, language, default branch).", handleGetRepo)
-	add(server, "github_list_prs", "List pull requests for a repository.", handleListPRs)
-	add(server, "github_get_pr", "Get details of a specific pull request.", handleGetPR)
-	add(server, "github_get_pr_diff", "Get the diff of a pull request.", handleGetPRDiff)
-	add(server, "github_create_pr", "Create a new pull request.", handleCreatePR)
-	add(server, "github_add_pr_comment", "Add a comment to a pull request.", handleAddPRComment)
-	add(server, "github_list_issues", "List issues for a repository.", handleListIssues)
-	add(server, "github_get_issue", "Get details of a specific issue.", handleGetIssue)
-	add(server, "github_add_issue_comment", "Add a comment to an issue.", handleAddIssueComment)
-	add(server, "github_list_branches", "List branches in a repository.", handleListBranches)
-	add(server, "github_get_check_runs", "Get check runs for a commit ref.", handleGetCheckRuns)
-	add(server, "github_get_workflow_runs", "Get recent workflow runs for a repository.", handleGetWorkflowRuns)
+	mcputil.AddToolTo(server, "github_get_repo", "Get repository info (description, stars, language, default branch).", handleGetRepo)
+	mcputil.AddToolTo(server, "github_list_prs", "List pull requests for a repository.", handleListPRs)
+	mcputil.AddToolTo(server, "github_get_pr", "Get details of a specific pull request.", handleGetPR)
+	mcputil.AddToolTo(server, "github_get_pr_diff", "Get the diff of a pull request.", handleGetPRDiff)
+	mcputil.AddToolTo(server, "github_create_pr", "Create a new pull request.", handleCreatePR, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "github_add_pr_comment", "Add a comment to a pull request.", handleAddPRComment, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "github_list_issues", "List issues for a repository.", handleListIssues)
+	mcputil.AddToolTo(server, "github_get_issue", "Get details of a specific issue.", handleGetIssue)
+	mcputil.AddToolTo(server, "github_add_issue_comment", "Add a comment to an issue.", handleAddIssueComment, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "github_list_branches", "List branches in a repository.", handleListBranches)
+	mcputil.AddToolTo(server, "github_get_check_runs", "Get check runs for a commit ref.", handleGetCheckRuns)
+	mcputil.AddToolTo(server, "github_get_workflow_runs", "Get recent workflow runs for a repository.", handleGetWorkflowRuns)
+
+	mcputil.Ready("mcp-tool-github")
+	defer mcputil.NotReady("mcp-tool-github")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
+		log.ErrorContext(ctx, "server exited with error", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -143,37 +144,35 @@ type workflowRunsInput struct {
 
 // ── Handlers ──
 
-func handleGetRepo(_ context.Context, _ *mcp.CallToolRequest, in repoInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
+func handleGetRepo(ctx context.Context, _ *mcp.CallToolRequest, in repoInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
-func handleListPRs(_ context.Context, _ *mcp.CallToolRequest, in listPRsInput) (*mcp.CallToolResult, any, error) {
+func handleListPRs(ctx context.Context, _ *mcp.CallToolRequest, in listPRsInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "open")
-	return ghGet("/repos/%s/%s/pulls?state=%s&per_page=30", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.QueryEscape(state)), nil, nil
+	return ghGet(ctx, "/repos/%s/%s/pulls?state=%s&per_page=30", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.QueryEscape(state)), nil, nil
 }
 
-func handleGetPR(_ context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/pulls/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
+func handleGetPR(ctx context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s/pulls/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
 }
 
-func handleGetPRDiff(_ context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d", apiBase, url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github.v3.diff")
-	resp, err := httpClient.Do(req)
+func handleGetPRDiff(ctx context.Context, _ *mcp.CallToolRequest, in prInput) (*mcp.CallToolResult, any, error) {
+	u := fmt.Sprintf("%s/repos/%s/%s/pulls/%d", apiBase, url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number)
+	body, status, err := mcputil.TracedHTTP(ctx, "GET", u,
+		mcputil.WithHeader("Authorization", "Bearer "+token),
+		mcputil.WithHeader("Accept", "application/vnd.github.v3.diff"),
+	)
 	if err != nil {
-		return errResult("request failed: %v", err), nil, nil
+		return mcputil.ErrResult("request failed: %v", err), nil, nil
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap (diffs can be large)
-	if resp.StatusCode >= 400 {
-		return errResult("HTTP %d: %s", resp.StatusCode, string(body)), nil, nil
+	if status >= 400 {
+		return mcputil.ErrResult("HTTP %d: %s", status, string(body)), nil, nil
 	}
-	return textResult(string(body)), nil, nil
+	return mcputil.TextResult(string(body)), nil, nil
 }
 
-func handleCreatePR(_ context.Context, _ *mcp.CallToolRequest, in createPRInput) (*mcp.CallToolResult, any, error) {
+func handleCreatePR(ctx context.Context, _ *mcp.CallToolRequest, in createPRInput) (*mcp.CallToolResult, any, error) {
 	payload := map[string]any{
 		"title": in.Title,
 		"head":  in.Head,
@@ -183,103 +182,95 @@ func handleCreatePR(_ context.Context, _ *mcp.CallToolRequest, in createPRInput)
 	if in.Body != "" {
 		payload["body"] = in.Body
 	}
-	return ghPost(fmt.Sprintf("/repos/%s/%s/pulls", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), payload), nil, nil
+	return ghPost(ctx, fmt.Sprintf("/repos/%s/%s/pulls", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), payload), nil, nil
 }
 
-func handleAddPRComment(_ context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
-	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
+func handleAddPRComment(ctx context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
+	return ghPost(ctx, fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
-func handleListIssues(_ context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
+func handleListIssues(ctx context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "open")
 	path := fmt.Sprintf("/repos/%s/%s/issues?state=%s&per_page=30", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.QueryEscape(state))
 	if in.Labels != "" {
 		path += "&labels=" + url.QueryEscape(in.Labels)
 	}
-	return ghGet("%s", path), nil, nil
+	return ghGet(ctx, "%s", path), nil, nil
 }
 
-func handleGetIssue(_ context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/issues/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
+func handleGetIssue(ctx context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s/issues/%d", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number), nil, nil
 }
 
-func handleAddIssueComment(_ context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
-	return ghPost(fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
+func handleAddIssueComment(ctx context.Context, _ *mcp.CallToolRequest, in commentInput) (*mcp.CallToolResult, any, error) {
+	return ghPost(ctx, fmt.Sprintf("/repos/%s/%s/issues/%d/comments", url.PathEscape(in.Owner), url.PathEscape(in.Repo), in.Number),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
-func handleListBranches(_ context.Context, _ *mcp.CallToolRequest, in branchesInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/branches?per_page=100", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
+func handleListBranches(ctx context.Context, _ *mcp.CallToolRequest, in branchesInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s/branches?per_page=100", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
-func handleGetCheckRuns(_ context.Context, _ *mcp.CallToolRequest, in checkRunsInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/commits/%s/check-runs", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.PathEscape(in.Ref)), nil, nil
+func handleGetCheckRuns(ctx context.Context, _ *mcp.CallToolRequest, in checkRunsInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s/commits/%s/check-runs", url.PathEscape(in.Owner), url.PathEscape(in.Repo), url.PathEscape(in.Ref)), nil, nil
 }
 
-func handleGetWorkflowRuns(_ context.Context, _ *mcp.CallToolRequest, in workflowRunsInput) (*mcp.CallToolResult, any, error) {
-	return ghGet("/repos/%s/%s/actions/runs?per_page=10", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
+func handleGetWorkflowRuns(ctx context.Context, _ *mcp.CallToolRequest, in workflowRunsInput) (*mcp.CallToolResult, any, error) {
+	return ghGet(ctx, "/repos/%s/%s/actions/runs?per_page=10", url.PathEscape(in.Owner), url.PathEscape(in.Repo)), nil, nil
 }
 
 // ── HTTP helpers ──
 
-func ghGet(pathFmt string, args ...any) *mcp.CallToolResult {
-	url := apiBase + fmt.Sprintf(pathFmt, args...)
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	return doRequest(req)
-}
-
-func ghPost(path string, payload map[string]any) *mcp.CallToolResult {
-	data, _ := json.Marshal(payload)
-	url := apiBase + path
-	req, _ := http.NewRequest("POST", url, strings.NewReader(string(data)))
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Content-Type", "application/json")
-	return doRequest(req)
-}
-
-func doRequest(req *http.Request) *mcp.CallToolResult {
-	resp, err := httpClient.Do(req)
+func ghGet(ctx context.Context, pathFmt string, args ...any) *mcp.CallToolResult {
+	u := apiBase + fmt.Sprintf(pathFmt, args...)
+	body, status, err := mcputil.TracedHTTP(ctx, "GET", u,
+		mcputil.WithHeader("Authorization", "Bearer "+token),
+		mcputil.WithHeader("Accept", "application/vnd.github+json"),
+	)
 	if err != nil {
-		return errResult("request failed: %v", err)
+		log.ErrorContext(ctx, "github API error", "url", u, "error", err)
+		return mcputil.ErrResult("request failed: %v", err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap
-
-	if resp.StatusCode >= 400 {
-		return errResult("HTTP %d: %s", resp.StatusCode, string(body))
+	if status >= 400 {
+		log.WarnContext(ctx, "github API non-200", "url", u, "status", status)
+		return mcputil.ErrResult("HTTP %d: %s", status, string(body))
 	}
+	return prettyJSON(body)
+}
 
-	// Pretty-print JSON
-	var pretty json.RawMessage
-	if json.Unmarshal(body, &pretty) == nil {
-		formatted, err := json.MarshalIndent(pretty, "", "  ")
-		if err == nil {
-			return textResult(string(formatted))
+func ghPost(ctx context.Context, path string, payload map[string]any) *mcp.CallToolResult {
+	data, _ := json.Marshal(payload)
+	u := apiBase + path
+	body, status, err := mcputil.TracedHTTP(ctx, "POST", u,
+		mcputil.WithHeader("Authorization", "Bearer "+token),
+		mcputil.WithHeader("Accept", "application/vnd.github+json"),
+		mcputil.WithHeader("Content-Type", "application/json"),
+		mcputil.WithBody(strings.NewReader(string(data))),
+	)
+	if err != nil {
+		log.ErrorContext(ctx, "github API error", "url", u, "error", err)
+		return mcputil.ErrResult("request failed: %v", err)
+	}
+	if status >= 400 {
+		log.WarnContext(ctx, "github API non-200", "url", u, "status", status)
+		return mcputil.ErrResult("HTTP %d: %s", status, string(body))
+	}
+	return prettyJSON(body)
+}
+
+// prettyJSON formats JSON for display, falling back to raw text.
+func prettyJSON(data []byte) *mcp.CallToolResult {
+	var raw json.RawMessage
+	if json.Unmarshal(data, &raw) == nil {
+		if formatted, err := json.MarshalIndent(raw, "", "  "); err == nil {
+			return mcputil.TextResult(string(formatted))
 		}
 	}
-	return textResult(string(body))
+	return mcputil.TextResult(string(data))
 }
 
 // ── Helpers ──
-
-func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc}, h)
-}
-
-func textResult(text string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
-}
-
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
-	}
-}
 
 func or(val, def string) string {
 	if val == "" {

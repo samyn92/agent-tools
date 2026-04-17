@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 type logsInput struct {
@@ -25,7 +26,7 @@ type logsInput struct {
 
 func handleLogs(ctx context.Context, _ *mcp.CallToolRequest, input logsInput) (*mcp.CallToolResult, any, error) {
 	if input.Name == "" {
-		return errResult("'name' is required"), nil, nil
+		return mcputil.ErrResult("'name' is required"), nil, nil
 	}
 
 	lines := input.Lines
@@ -36,10 +37,10 @@ func handleLogs(ctx context.Context, _ *mcp.CallToolRequest, input logsInput) (*
 	// Fuzzy-resolve the pod
 	obj, kind, err := fuzzyFindOne(ctx, input.Name, "Pod", input.Namespace)
 	if err != nil {
-		return errResult("Pod not found: %v", err), nil, nil
+		return mcputil.ErrResult("Pod not found: %v", err), nil, nil
 	}
 	if kind != "Pod" {
-		return errResult("Found %s/%s but expected a Pod", kind, obj.GetName()), nil, nil
+		return mcputil.ErrResult("Found %s/%s but expected a Pod", kind, obj.GetName()), nil, nil
 	}
 
 	podName := obj.GetName()
@@ -58,7 +59,7 @@ func handleLogs(ctx context.Context, _ *mcp.CallToolRequest, input logsInput) (*
 	// Fetch current logs
 	current, err := getPodLogs(ctx, namespace, podName, input.Container, lines, false)
 	if err != nil {
-		return errResult("Error fetching logs for %s/%s: %v", namespace, podName, err), nil, nil
+		return mcputil.ErrResult("Error fetching logs for %s/%s: %v", namespace, podName, err), nil, nil
 	}
 
 	totalLines := strings.Count(current, "\n")

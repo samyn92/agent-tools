@@ -15,57 +15,63 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
-var tempoURL string
+var (
+	tempoURL string
+	log      *slog.Logger
+)
 
 func main() {
-	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-tempo")
+	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-tempo")
 	defer func() { shutdown(context.Background()) }()
+
+	log = mcputil.Logger()
 
 	tempoURL = strings.TrimRight(or(os.Getenv("TEMPO_URL"), "http://tempo.observability.svc.cluster.local:3200"), "/")
 
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: "tempo-tools", Version: "0.1.0"},
-		nil,
-	)
+	server := mcputil.NewServer("tempo-tools", "0.1.0")
 
-	add(server, "tempo_search",
+	mcputil.AddToolTo(server, "tempo_search",
 		"Search traces by agent name, time range, and status. Returns summarized trace metadata with durations, step counts, and token usage. Use this as the starting point to find traces worth investigating.",
 		handleSearch)
 
-	add(server, "tempo_get",
+	mcputil.AddToolTo(server, "tempo_get",
 		"Fetch a full trace by traceID. Returns the complete span tree with durations, tool calls, token usage, errors, and memory operations. Use after tempo_search to drill into a specific execution.",
 		handleGet)
 
-	add(server, "tempo_agent_stats",
+	mcputil.AddToolTo(server, "tempo_agent_stats",
 		"Compute aggregate performance statistics for an agent over a time window. Returns avg/p50/p95/p99 prompt duration, avg steps per prompt, avg token usage, error rate, slowest tools, and most-called tools. This is your main optimization analysis tool.",
 		handleAgentStats)
 
-	add(server, "tempo_slow_tools",
+	mcputil.AddToolTo(server, "tempo_slow_tools",
 		"Find the slowest tool calls across all agents (or a specific agent) in a time window. Identifies performance bottlenecks at the tool level.",
 		handleSlowTools)
 
-	add(server, "tempo_errors",
+	mcputil.AddToolTo(server, "tempo_errors",
 		"Find all error spans (tool failures, model fallbacks, timeouts) across agents in a time window. Groups errors by type, agent, and tool. Use this to identify reliability issues.",
 		handleErrors)
 
-	add(server, "tempo_compare",
+	mcputil.AddToolTo(server, "tempo_compare",
 		"Compare two traces side-by-side by traceID. Shows differences in step count, token usage, duration, and tool call patterns. Use after applying an optimization to measure impact.",
 		handleCompare)
+
+	mcputil.Ready("mcp-tool-tempo")
+	defer mcputil.NotReady("mcp-tool-tempo")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
+		log.ErrorContext(ctx, "server exited with error", "error", err)
+		os.Exit(1)
 	}
 }

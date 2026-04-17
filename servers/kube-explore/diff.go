@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -28,16 +29,16 @@ type diffInput struct {
 
 func handleDiff(ctx context.Context, _ *mcp.CallToolRequest, input diffInput) (*mcp.CallToolResult, any, error) {
 	if input.Name == "" {
-		return errResult("'name' is required"), nil, nil
+		return mcputil.ErrResult("'name' is required"), nil, nil
 	}
 	if input.Kind == "" {
-		return errResult("'kind' is required"), nil, nil
+		return mcputil.ErrResult("'kind' is required"), nil, nil
 	}
 
 	// Get the live resource
 	liveObj, _, err := fuzzyFindOne(ctx, input.Name, input.Kind, input.Namespace)
 	if err != nil {
-		return errResult("Resource not found: %v", err), nil, nil
+		return mcputil.ErrResult("Resource not found: %v", err), nil, nil
 	}
 
 	response := DiffResponse{
@@ -66,7 +67,7 @@ func handleDiff(ctx context.Context, _ *mcp.CallToolRequest, input diffInput) (*
 	decoder := yamlutil.NewYAMLOrJSONDecoder(strings.NewReader(input.Source), 4096)
 	var rawDesired map[string]interface{}
 	if err := decoder.Decode(&rawDesired); err != nil {
-		return errResult("Error parsing source manifest: %v", err), nil, nil
+		return mcputil.ErrResult("Error parsing source manifest: %v", err), nil, nil
 	}
 	desiredObj := &unstructured.Unstructured{Object: rawDesired}
 

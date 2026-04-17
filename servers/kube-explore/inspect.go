@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -28,13 +29,13 @@ type inspectInput struct {
 
 func handleInspect(ctx context.Context, _ *mcp.CallToolRequest, input inspectInput) (*mcp.CallToolResult, any, error) {
 	if input.Name == "" {
-		return errResult("'name' is required"), nil, nil
+		return mcputil.ErrResult("'name' is required"), nil, nil
 	}
 
 	// First, find the resource using fuzzy matching
 	obj, kind, err := fuzzyFindOne(ctx, input.Name, input.Kind, input.Namespace)
 	if err != nil {
-		return errResult("Resource not found: %v", err), nil, nil
+		return mcputil.ErrResult("Resource not found: %v", err), nil, nil
 	}
 
 	// Build the inspection response in parallel

@@ -19,58 +19,59 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samyn92/agent-tools/servers/pkg/otelutil"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 var (
-	apiBase    string
-	token      string
-	httpClient = &http.Client{Timeout: 30 * time.Second}
+	apiBase string
+	token   string
+	log     *slog.Logger
 )
 
 func main() {
-	shutdown, _ := otelutil.Init(context.Background(), "mcp-tool-gitlab")
+	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-gitlab")
 	defer func() { shutdown(context.Background()) }()
+
+	log = mcputil.Logger()
 
 	glURL := strings.TrimRight(or(os.Getenv("GITLAB_URL"), "https://gitlab.com"), "/")
 	apiBase = glURL + "/api/v4"
 	token = os.Getenv("GITLAB_TOKEN")
 	if token == "" {
-		log.Fatal("GITLAB_TOKEN environment variable is required")
+		log.Error("GITLAB_TOKEN environment variable is required")
+		os.Exit(1)
 	}
 
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: "gitlab-tools", Version: "0.1.0"},
-		nil,
-	)
+	server := mcputil.NewServer("gitlab-tools", "0.1.0")
 
-	add(server, "gitlab_get_project", "Get GitLab project info (description, visibility, default branch).", handleGetProject)
-	add(server, "gitlab_list_mrs", "List merge requests for a project.", handleListMRs)
-	add(server, "gitlab_get_mr", "Get details of a specific merge request.", handleGetMR)
-	add(server, "gitlab_get_mr_diff", "Get the diff/changes of a merge request.", handleGetMRDiff)
-	add(server, "gitlab_create_mr", "Create a new merge request.", handleCreateMR)
-	add(server, "gitlab_add_mr_note", "Add a comment (note) to a merge request.", handleAddMRNote)
-	add(server, "gitlab_list_issues", "List issues for a project.", handleListIssues)
-	add(server, "gitlab_get_issue", "Get details of a specific issue.", handleGetIssue)
-	add(server, "gitlab_add_issue_note", "Add a comment (note) to an issue.", handleAddIssueNote)
-	add(server, "gitlab_get_pipeline", "Get details of a specific pipeline.", handleGetPipeline)
+	mcputil.AddToolTo(server, "gitlab_get_project", "Get GitLab project info (description, visibility, default branch).", handleGetProject)
+	mcputil.AddToolTo(server, "gitlab_list_mrs", "List merge requests for a project.", handleListMRs)
+	mcputil.AddToolTo(server, "gitlab_get_mr", "Get details of a specific merge request.", handleGetMR)
+	mcputil.AddToolTo(server, "gitlab_get_mr_diff", "Get the diff/changes of a merge request.", handleGetMRDiff)
+	mcputil.AddToolTo(server, "gitlab_create_mr", "Create a new merge request.", handleCreateMR, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "gitlab_add_mr_note", "Add a comment (note) to a merge request.", handleAddMRNote, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "gitlab_list_issues", "List issues for a project.", handleListIssues)
+	mcputil.AddToolTo(server, "gitlab_get_issue", "Get details of a specific issue.", handleGetIssue)
+	mcputil.AddToolTo(server, "gitlab_add_issue_note", "Add a comment (note) to an issue.", handleAddIssueNote, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "gitlab_get_pipeline", "Get details of a specific pipeline.", handleGetPipeline)
+
+	mcputil.Ready("mcp-tool-gitlab")
+	defer mcputil.NotReady("mcp-tool-gitlab")
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
-		log.Fatal(err)
+		log.ErrorContext(ctx, "server exited with error", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -128,24 +129,24 @@ type pipelineInput struct {
 
 // ── Handlers ──
 
-func handleGetProject(_ context.Context, _ *mcp.CallToolRequest, in projectInput) (*mcp.CallToolResult, any, error) {
-	return glGet("/projects/%s", encode(in.Project)), nil, nil
+func handleGetProject(ctx context.Context, _ *mcp.CallToolRequest, in projectInput) (*mcp.CallToolResult, any, error) {
+	return glGet(ctx, "/projects/%s", encode(in.Project)), nil, nil
 }
 
-func handleListMRs(_ context.Context, _ *mcp.CallToolRequest, in listMRsInput) (*mcp.CallToolResult, any, error) {
+func handleListMRs(ctx context.Context, _ *mcp.CallToolRequest, in listMRsInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "opened")
-	return glGet("/projects/%s/merge_requests?state=%s&per_page=30", encode(in.Project), state), nil, nil
+	return glGet(ctx, "/projects/%s/merge_requests?state=%s&per_page=30", encode(in.Project), state), nil, nil
 }
 
-func handleGetMR(_ context.Context, _ *mcp.CallToolRequest, in mrInput) (*mcp.CallToolResult, any, error) {
-	return glGet("/projects/%s/merge_requests/%d", encode(in.Project), in.IID), nil, nil
+func handleGetMR(ctx context.Context, _ *mcp.CallToolRequest, in mrInput) (*mcp.CallToolResult, any, error) {
+	return glGet(ctx, "/projects/%s/merge_requests/%d", encode(in.Project), in.IID), nil, nil
 }
 
-func handleGetMRDiff(_ context.Context, _ *mcp.CallToolRequest, in mrInput) (*mcp.CallToolResult, any, error) {
-	return glGet("/projects/%s/merge_requests/%d/changes", encode(in.Project), in.IID), nil, nil
+func handleGetMRDiff(ctx context.Context, _ *mcp.CallToolRequest, in mrInput) (*mcp.CallToolResult, any, error) {
+	return glGet(ctx, "/projects/%s/merge_requests/%d/changes", encode(in.Project), in.IID), nil, nil
 }
 
-func handleCreateMR(_ context.Context, _ *mcp.CallToolRequest, in createMRInput) (*mcp.CallToolResult, any, error) {
+func handleCreateMR(ctx context.Context, _ *mcp.CallToolRequest, in createMRInput) (*mcp.CallToolResult, any, error) {
 	payload := map[string]any{
 		"title":         in.Title,
 		"source_branch": in.SourceBranch,
@@ -154,95 +155,87 @@ func handleCreateMR(_ context.Context, _ *mcp.CallToolRequest, in createMRInput)
 	if in.Description != "" {
 		payload["description"] = in.Description
 	}
-	return glPost(fmt.Sprintf("/projects/%s/merge_requests", encode(in.Project)), payload), nil, nil
+	return glPost(ctx, fmt.Sprintf("/projects/%s/merge_requests", encode(in.Project)), payload), nil, nil
 }
 
-func handleAddMRNote(_ context.Context, _ *mcp.CallToolRequest, in mrNoteInput) (*mcp.CallToolResult, any, error) {
-	return glPost(fmt.Sprintf("/projects/%s/merge_requests/%d/notes", encode(in.Project), in.IID),
+func handleAddMRNote(ctx context.Context, _ *mcp.CallToolRequest, in mrNoteInput) (*mcp.CallToolResult, any, error) {
+	return glPost(ctx, fmt.Sprintf("/projects/%s/merge_requests/%d/notes", encode(in.Project), in.IID),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
-func handleListIssues(_ context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
+func handleListIssues(ctx context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "opened")
 	u := fmt.Sprintf("/projects/%s/issues?state=%s&per_page=30", encode(in.Project), state)
 	if in.Labels != "" {
 		u += "&labels=" + in.Labels
 	}
-	return glGet("%s", u), nil, nil
+	return glGet(ctx, "%s", u), nil, nil
 }
 
-func handleGetIssue(_ context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
-	return glGet("/projects/%s/issues/%d", encode(in.Project), in.IID), nil, nil
+func handleGetIssue(ctx context.Context, _ *mcp.CallToolRequest, in issueInput) (*mcp.CallToolResult, any, error) {
+	return glGet(ctx, "/projects/%s/issues/%d", encode(in.Project), in.IID), nil, nil
 }
 
-func handleAddIssueNote(_ context.Context, _ *mcp.CallToolRequest, in issueNoteInput) (*mcp.CallToolResult, any, error) {
-	return glPost(fmt.Sprintf("/projects/%s/issues/%d/notes", encode(in.Project), in.IID),
+func handleAddIssueNote(ctx context.Context, _ *mcp.CallToolRequest, in issueNoteInput) (*mcp.CallToolResult, any, error) {
+	return glPost(ctx, fmt.Sprintf("/projects/%s/issues/%d/notes", encode(in.Project), in.IID),
 		map[string]any{"body": in.Body}), nil, nil
 }
 
-func handleGetPipeline(_ context.Context, _ *mcp.CallToolRequest, in pipelineInput) (*mcp.CallToolResult, any, error) {
-	return glGet("/projects/%s/pipelines/%d", encode(in.Project), in.PipelineID), nil, nil
+func handleGetPipeline(ctx context.Context, _ *mcp.CallToolRequest, in pipelineInput) (*mcp.CallToolResult, any, error) {
+	return glGet(ctx, "/projects/%s/pipelines/%d", encode(in.Project), in.PipelineID), nil, nil
 }
 
 // ── HTTP helpers ──
 
-func glGet(pathFmt string, args ...any) *mcp.CallToolResult {
+func glGet(ctx context.Context, pathFmt string, args ...any) *mcp.CallToolResult {
 	u := apiBase + fmt.Sprintf(pathFmt, args...)
-	req, _ := http.NewRequest("GET", u, nil)
-	req.Header.Set("PRIVATE-TOKEN", token)
-	return doRequest(req)
+	body, status, err := mcputil.TracedHTTP(ctx, "GET", u,
+		mcputil.WithHeader("PRIVATE-TOKEN", token),
+	)
+	if err != nil {
+		log.ErrorContext(ctx, "gitlab API error", "url", u, "error", err)
+		return mcputil.ErrResult("request failed: %v", err)
+	}
+	if status >= 400 {
+		log.WarnContext(ctx, "gitlab API non-200", "url", u, "status", status)
+		return mcputil.ErrResult("HTTP %d: %s", status, string(body))
+	}
+	return prettyJSON(body)
 }
 
-func glPost(path string, payload map[string]any) *mcp.CallToolResult {
+func glPost(ctx context.Context, path string, payload map[string]any) *mcp.CallToolResult {
 	data, _ := json.Marshal(payload)
 	u := apiBase + path
-	req, _ := http.NewRequest("POST", u, strings.NewReader(string(data)))
-	req.Header.Set("PRIVATE-TOKEN", token)
-	req.Header.Set("Content-Type", "application/json")
-	return doRequest(req)
+	body, status, err := mcputil.TracedHTTP(ctx, "POST", u,
+		mcputil.WithHeader("PRIVATE-TOKEN", token),
+		mcputil.WithHeader("Content-Type", "application/json"),
+		mcputil.WithBody(strings.NewReader(string(data))),
+	)
+	if err != nil {
+		log.ErrorContext(ctx, "gitlab API error", "url", u, "error", err)
+		return mcputil.ErrResult("request failed: %v", err)
+	}
+	if status >= 400 {
+		log.WarnContext(ctx, "gitlab API non-200", "url", u, "status", status)
+		return mcputil.ErrResult("HTTP %d: %s", status, string(body))
+	}
+	return prettyJSON(body)
 }
 
-func doRequest(req *http.Request) *mcp.CallToolResult {
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return errResult("request failed: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10 MiB cap
-
-	if resp.StatusCode >= 400 {
-		return errResult("HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	var pretty json.RawMessage
-	if json.Unmarshal(body, &pretty) == nil {
-		formatted, err := json.MarshalIndent(pretty, "", "  ")
-		if err == nil {
-			return textResult(string(formatted))
+func prettyJSON(data []byte) *mcp.CallToolResult {
+	var raw json.RawMessage
+	if json.Unmarshal(data, &raw) == nil {
+		if formatted, err := json.MarshalIndent(raw, "", "  "); err == nil {
+			return mcputil.TextResult(string(formatted))
 		}
 	}
-	return textResult(string(body))
+	return mcputil.TextResult(string(data))
 }
 
 // ── Helpers ──
 
-func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc}, h)
-}
-
 func encode(project string) string {
 	return url.PathEscape(project)
-}
-
-func textResult(text string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
-}
-
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
-	}
 }
 
 func or(val, def string) string {

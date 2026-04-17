@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v0.8.0
-	github.com/samyn92/agent-tools/servers/pkg/otelutil v0.0.0
+	github.com/samyn92/agent-tools/servers/pkg/mcputil v0.0.0
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
@@ -68,4 +68,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/samyn92/agent-tools/servers/pkg/otelutil => ../pkg/otelutil
+replace github.com/samyn92/agent-tools/servers/pkg/mcputil => ../pkg/mcputil

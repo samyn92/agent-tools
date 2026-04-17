@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -12,31 +12,17 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── MCP helpers ─────────────────────────────────────────────────────
 
-func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc}, h)
-}
-
-func textResult(text string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
-}
-
 func jsonResult(v any) *mcp.CallToolResult {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return errResult("json marshal: %v", err)
+		return mcputil.ErrResult("json marshal: %v", err)
 	}
-	return textResult(string(data))
-}
-
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
-	}
+	return mcputil.TextResult(string(data))
 }
 
 func or(val, def string) string {
@@ -46,29 +32,27 @@ func or(val, def string) string {
 	return val
 }
 
-// ── Tempo HTTP client ───────────────────────────────────────────────
+// ── Tempo HTTP client (traced) ──────────────────────────────────────
 
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+var tempoHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
-// tempoGet performs a GET request to Tempo's HTTP API.
-func tempoGet(path string) ([]byte, error) {
-	resp, err := httpClient.Get(tempoURL + path)
+// tempoGet performs a traced GET request to Tempo's HTTP API.
+func tempoGet(ctx context.Context, path string) ([]byte, error) {
+	body, status, err := mcputil.TracedHTTP(ctx, "GET", tempoURL+path,
+		mcputil.WithHTTPClient(tempoHTTPClient),
+		mcputil.WithMaxResponseBody(50<<20), // 50 MiB cap
+	)
 	if err != nil {
 		return nil, fmt.Errorf("tempo request failed: %w", err)
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20)) // 50 MiB cap
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	if status >= 400 {
+		return nil, fmt.Errorf("HTTP %d: %s", status, string(body))
 	}
 	return body, nil
 }
 
 // tempoSearch runs a TraceQL search query.
-func tempoSearch(query string, limit int, start, end time.Time) (*searchResponse, error) {
+func tempoSearch(ctx context.Context, query string, limit int, start, end time.Time) (*searchResponse, error) {
 	params := url.Values{}
 	params.Set("q", query)
 	if limit > 0 {
@@ -83,7 +67,7 @@ func tempoSearch(query string, limit int, start, end time.Time) (*searchResponse
 		params.Set("end", strconv.FormatInt(end.Unix(), 10))
 	}
 
-	data, err := tempoGet("/api/search?" + params.Encode())
+	data, err := tempoGet(ctx, "/api/search?"+params.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -96,8 +80,8 @@ func tempoSearch(query string, limit int, start, end time.Time) (*searchResponse
 }
 
 // tempoGetTrace fetches a full trace by ID from Tempo.
-func tempoGetTrace(traceID string) (*otlpTraceResponse, error) {
-	data, err := tempoGet("/api/traces/" + traceID)
+func tempoGetTrace(ctx context.Context, traceID string) (*otlpTraceResponse, error) {
+	data, err := tempoGet(ctx, "/api/traces/"+traceID)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -56,35 +57,35 @@ type cloneOrPullInput struct {
 
 // ── Registration ──
 
-func registerReadwriteTools(s *mcp.Server) {
-	add(s, "git_add", "Stage files for commit. Use '.' to stage all changes.", handleAdd)
-	add(s, "git_commit", "Create a new commit with staged changes.", handleCommit)
-	add(s, "git_push", "Push commits to the remote repository.", handlePush)
-	add(s, "git_pull", "Pull changes from the remote repository.", handlePull)
-	add(s, "git_branch", "Create or switch branches.", handleBranch)
-	add(s, "git_clone", "Clone a repository into the workspace.", handleClone)
-	add(s, "git_clone_or_pull", "Clone a repo if it doesn't exist locally, or pull latest if it does. Idempotent.", handleCloneOrPull)
+func registerReadwriteTools(s *mcputil.Server) {
+	mcputil.AddToolTo(s, "git_add", "Stage files for commit. Use '.' to stage all changes.", handleAdd)
+	mcputil.AddToolTo(s, "git_commit", "Create a new commit with staged changes.", handleCommit, mcputil.WithInputOutput())
+	mcputil.AddToolTo(s, "git_push", "Push commits to the remote repository.", handlePush, mcputil.WithInputOutput())
+	mcputil.AddToolTo(s, "git_pull", "Pull changes from the remote repository.", handlePull)
+	mcputil.AddToolTo(s, "git_branch", "Create or switch branches.", handleBranch, mcputil.WithInputOutput())
+	mcputil.AddToolTo(s, "git_clone", "Clone a repository into the workspace.", handleClone, mcputil.WithInputOutput())
+	mcputil.AddToolTo(s, "git_clone_or_pull", "Clone a repo if it doesn't exist locally, or pull latest if it does. Idempotent.", handleCloneOrPull, mcputil.WithInputOutput())
 }
 
 // ── Handlers ──
 
-func handleAdd(_ context.Context, _ *mcp.CallToolRequest, in addFilesInput) (*mcp.CallToolResult, any, error) {
+func handleAdd(ctx context.Context, _ *mcp.CallToolRequest, in addFilesInput) (*mcp.CallToolResult, any, error) {
 	files := strings.Fields(in.Files)
 	if len(files) == 0 {
-		return errResult("files is required"), nil, nil
+		return mcputil.ErrResult("files is required"), nil, nil
 	}
 	args := append([]string{"add"}, files...)
-	return git(in.Cwd, args...), nil, nil
+	return git(ctx, in.Cwd, args...), nil, nil
 }
 
-func handleCommit(_ context.Context, _ *mcp.CallToolRequest, in commitInput) (*mcp.CallToolResult, any, error) {
+func handleCommit(ctx context.Context, _ *mcp.CallToolRequest, in commitInput) (*mcp.CallToolResult, any, error) {
 	if in.Message == "" {
-		return errResult("message is required"), nil, nil
+		return mcputil.ErrResult("message is required"), nil, nil
 	}
-	return git(in.Cwd, "commit", "-m", in.Message), nil, nil
+	return git(ctx, in.Cwd, "commit", "-m", in.Message), nil, nil
 }
 
-func handlePush(_ context.Context, _ *mcp.CallToolRequest, in pushInput) (*mcp.CallToolResult, any, error) {
+func handlePush(ctx context.Context, _ *mcp.CallToolRequest, in pushInput) (*mcp.CallToolResult, any, error) {
 	remote := or(in.Remote, "origin")
 	args := []string{"push", remote}
 	if in.Branch != "" {
@@ -93,35 +94,35 @@ func handlePush(_ context.Context, _ *mcp.CallToolRequest, in pushInput) (*mcp.C
 	if in.Force {
 		args = append(args, "--force-with-lease")
 	}
-	return gitNetwork(in.Cwd, args...), nil, nil
+	return gitNetwork(ctx, in.Cwd, args...), nil, nil
 }
 
-func handlePull(_ context.Context, _ *mcp.CallToolRequest, in pullInput) (*mcp.CallToolResult, any, error) {
+func handlePull(ctx context.Context, _ *mcp.CallToolRequest, in pullInput) (*mcp.CallToolResult, any, error) {
 	remote := or(in.Remote, "origin")
 	args := []string{"pull", remote}
 	if in.Branch != "" {
 		args = append(args, in.Branch)
 	}
-	return gitNetwork(in.Cwd, args...), nil, nil
+	return gitNetwork(ctx, in.Cwd, args...), nil, nil
 }
 
-func handleBranch(_ context.Context, _ *mcp.CallToolRequest, in branchInput) (*mcp.CallToolResult, any, error) {
+func handleBranch(ctx context.Context, _ *mcp.CallToolRequest, in branchInput) (*mcp.CallToolResult, any, error) {
 	if in.Name == "" {
-		return errResult("name is required"), nil, nil
+		return mcputil.ErrResult("name is required"), nil, nil
 	}
 	if in.Create {
-		return git(in.Cwd, "checkout", "-b", in.Name), nil, nil
+		return git(ctx, in.Cwd, "checkout", "-b", in.Name), nil, nil
 	}
-	return git(in.Cwd, "checkout", in.Name), nil, nil
+	return git(ctx, in.Cwd, "checkout", in.Name), nil, nil
 }
 
-func handleClone(_ context.Context, _ *mcp.CallToolRequest, in cloneInput) (*mcp.CallToolResult, any, error) {
+func handleClone(ctx context.Context, _ *mcp.CallToolRequest, in cloneInput) (*mcp.CallToolResult, any, error) {
 	if in.URL == "" {
-		return errResult("url is required"), nil, nil
+		return mcputil.ErrResult("url is required"), nil, nil
 	}
 	target, err := resolveCloneTarget(in.URL, in.Dir)
 	if err != nil {
-		return errResult("blocked: %s", err), nil, nil
+		return mcputil.ErrResult("blocked: %s", err), nil, nil
 	}
 
 	args := []string{"clone"}
@@ -133,18 +134,16 @@ func handleClone(_ context.Context, _ *mcp.CallToolRequest, in cloneInput) (*mcp
 	}
 	args = append(args, in.URL, target)
 
-	// Use gitWithTimeout for proper timeout (120s) instead of context.Background().
-	// Clone doesn't need a cwd (target dir doesn't exist yet), so pass empty.
-	return gitWithTimeout(networkTimeout, "", args...), nil, nil
+	return gitWithTimeout(ctx, networkTimeout, "", args...), nil, nil
 }
 
-func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPullInput) (*mcp.CallToolResult, any, error) {
+func handleCloneOrPull(ctx context.Context, _ *mcp.CallToolRequest, in cloneOrPullInput) (*mcp.CallToolResult, any, error) {
 	if in.URL == "" {
-		return errResult("url is required"), nil, nil
+		return mcputil.ErrResult("url is required"), nil, nil
 	}
 	target, err := resolveCloneTarget(in.URL, in.Dir)
 	if err != nil {
-		return errResult("blocked: %s", err), nil, nil
+		return mcputil.ErrResult("blocked: %s", err), nil, nil
 	}
 
 	if _, err := os.Stat(filepath.Join(target, ".git")); err == nil {
@@ -154,17 +153,17 @@ func handleCloneOrPull(_ context.Context, _ *mcp.CallToolRequest, in cloneOrPull
 		if in.Branch != "" {
 			args = append(args, in.Branch)
 		}
-		return gitNetwork(target, args...), nil, nil
+		return gitNetwork(ctx, target, args...), nil, nil
 	}
 
-	// Clone — use gitWithTimeout for proper timeout (120s) instead of context.Background()
+	// Clone
 	args := []string{"clone"}
 	if in.Branch != "" {
 		args = append(args, "-b", in.Branch)
 	}
 	args = append(args, in.URL, target)
 
-	return gitWithTimeout(networkTimeout, "", args...), nil, nil
+	return gitWithTimeout(ctx, networkTimeout, "", args...), nil, nil
 }
 
 // resolveCloneTarget determines the target directory for a clone.

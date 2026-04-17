@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // ── Input types ──
@@ -81,12 +82,12 @@ type annotateInput struct {
 
 // ── Handlers ──
 
-func handleExec(_ context.Context, _ *mcp.CallToolRequest, in execInput) (*mcp.CallToolResult, any, error) {
+func handleExec(ctx context.Context, _ *mcp.CallToolRequest, in execInput) (*mcp.CallToolResult, any, error) {
 	if in.Pod == "" {
-		return errResult("pod is required"), nil, nil
+		return mcputil.ErrResult("pod is required"), nil, nil
 	}
 	if in.Command == "" {
-		return errResult("command is required"), nil, nil
+		return mcputil.ErrResult("command is required"), nil, nil
 	}
 
 	timeout := in.Timeout
@@ -104,24 +105,23 @@ func handleExec(_ context.Context, _ *mcp.CallToolRequest, in execInput) (*mcp.C
 	}
 	args = append(args, "--", "sh", "-c", in.Command)
 
-	return kubeWithTimeout(time.Duration(timeout)*time.Second, args...), nil, nil
+	return kubeWithTimeout(ctx, time.Duration(timeout)*time.Second, args...), nil, nil
 }
 
-func handleApply(_ context.Context, _ *mcp.CallToolRequest, in applyInput) (*mcp.CallToolResult, any, error) {
+func handleApply(ctx context.Context, _ *mcp.CallToolRequest, in applyInput) (*mcp.CallToolResult, any, error) {
 	if in.Manifest == "" {
-		return errResult("manifest is required"), nil, nil
+		return mcputil.ErrResult("manifest is required"), nil, nil
 	}
 
-	// Write manifest to a temp file
 	tmpfile, err := os.CreateTemp("", "kubectl-apply-*.yaml")
 	if err != nil {
-		return errResult("failed to create temp file: %s", err), nil, nil
+		return mcputil.ErrResult("failed to create temp file: %s", err), nil, nil
 	}
 	defer os.Remove(tmpfile.Name())
 
 	if _, err := tmpfile.WriteString(in.Manifest); err != nil {
 		tmpfile.Close()
-		return errResult("failed to write manifest: %s", err), nil, nil
+		return mcputil.ErrResult("failed to write manifest: %s", err), nil, nil
 	}
 	tmpfile.Close()
 
@@ -130,15 +130,15 @@ func handleApply(_ context.Context, _ *mcp.CallToolRequest, in applyInput) (*mcp
 	if in.DryRun != "" {
 		args = append(args, "--dry-run", in.DryRun)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleDelete(_ context.Context, _ *mcp.CallToolRequest, in deleteInput) (*mcp.CallToolResult, any, error) {
+func handleDelete(ctx context.Context, _ *mcp.CallToolRequest, in deleteInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required"), nil, nil
+		return mcputil.ErrResult("resource is required"), nil, nil
 	}
 	if in.Name == "" && in.Selector == "" {
-		return errResult("name or selector is required"), nil, nil
+		return mcputil.ErrResult("name or selector is required"), nil, nil
 	}
 
 	args := []string{"delete", in.Resource}
@@ -152,15 +152,15 @@ func handleDelete(_ context.Context, _ *mcp.CallToolRequest, in deleteInput) (*m
 	if in.Force {
 		args = append(args, "--grace-period=0", "--force")
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleRun(_ context.Context, _ *mcp.CallToolRequest, in runInput) (*mcp.CallToolResult, any, error) {
+func handleRun(ctx context.Context, _ *mcp.CallToolRequest, in runInput) (*mcp.CallToolResult, any, error) {
 	if in.Name == "" {
-		return errResult("name is required"), nil, nil
+		return mcputil.ErrResult("name is required"), nil, nil
 	}
 	if in.Image == "" {
-		return errResult("image is required"), nil, nil
+		return mcputil.ErrResult("image is required"), nil, nil
 	}
 
 	timeout := in.Timeout
@@ -173,25 +173,21 @@ func handleRun(_ context.Context, _ *mcp.CallToolRequest, in runInput) (*mcp.Cal
 
 	args := []string{"run", in.Name, "--image", in.Image, "--restart=Never"}
 	args = appendNamespace(args, in.Namespace)
-
-	// Always attach and clean up — MCP tools need to capture output.
-	// The rm field is kept for API compatibility but --rm is always applied
-	// since there's no interactive session to leave a pod running for.
 	args = append(args, "--rm", "--attach")
 
 	if in.Command != "" {
 		args = append(args, "--", "sh", "-c", in.Command)
 	}
 
-	return kubeWithTimeout(time.Duration(timeout)*time.Second, args...), nil, nil
+	return kubeWithTimeout(ctx, time.Duration(timeout)*time.Second, args...), nil, nil
 }
 
-func handleCp(_ context.Context, _ *mcp.CallToolRequest, in cpInput) (*mcp.CallToolResult, any, error) {
+func handleCp(ctx context.Context, _ *mcp.CallToolRequest, in cpInput) (*mcp.CallToolResult, any, error) {
 	if in.Src == "" {
-		return errResult("src is required"), nil, nil
+		return mcputil.ErrResult("src is required"), nil, nil
 	}
 	if in.Dst == "" {
-		return errResult("dst is required"), nil, nil
+		return mcputil.ErrResult("dst is required"), nil, nil
 	}
 
 	args := []string{"cp", in.Src, in.Dst}
@@ -199,16 +195,16 @@ func handleCp(_ context.Context, _ *mcp.CallToolRequest, in cpInput) (*mcp.CallT
 	if in.Container != "" {
 		args = append(args, "-c", in.Container)
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleRollout(_ context.Context, _ *mcp.CallToolRequest, in rolloutInput) (*mcp.CallToolResult, any, error) {
+func handleRollout(ctx context.Context, _ *mcp.CallToolRequest, in rolloutInput) (*mcp.CallToolResult, any, error) {
 	validActions := map[string]bool{"status": true, "history": true, "undo": true, "restart": true}
 	if !validActions[in.Action] {
-		return errResult("action must be one of: status, history, undo, restart"), nil, nil
+		return mcputil.ErrResult("action must be one of: status, history, undo, restart"), nil, nil
 	}
 	if in.Resource == "" {
-		return errResult("resource is required (e.g. deployment/nginx)"), nil, nil
+		return mcputil.ErrResult("resource is required (e.g. deployment/nginx)"), nil, nil
 	}
 
 	args := []string{"rollout", in.Action, in.Resource}
@@ -216,25 +212,25 @@ func handleRollout(_ context.Context, _ *mcp.CallToolRequest, in rolloutInput) (
 	if in.Action == "undo" && in.Revision > 0 {
 		args = append(args, fmt.Sprintf("--to-revision=%d", in.Revision))
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleScale(_ context.Context, _ *mcp.CallToolRequest, in scaleInput) (*mcp.CallToolResult, any, error) {
+func handleScale(ctx context.Context, _ *mcp.CallToolRequest, in scaleInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" {
-		return errResult("resource is required (e.g. deployment/nginx)"), nil, nil
+		return mcputil.ErrResult("resource is required (e.g. deployment/nginx)"), nil, nil
 	}
 
 	args := []string{"scale", in.Resource, fmt.Sprintf("--replicas=%d", in.Replicas)}
 	args = appendNamespace(args, in.Namespace)
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleLabel(_ context.Context, _ *mcp.CallToolRequest, in labelInput) (*mcp.CallToolResult, any, error) {
+func handleLabel(ctx context.Context, _ *mcp.CallToolRequest, in labelInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	if in.Labels == "" {
-		return errResult("labels is required"), nil, nil
+		return mcputil.ErrResult("labels is required"), nil, nil
 	}
 
 	args := []string{"label", in.Resource, in.Name}
@@ -243,15 +239,15 @@ func handleLabel(_ context.Context, _ *mcp.CallToolRequest, in labelInput) (*mcp
 	if in.Overwrite {
 		args = append(args, "--overwrite")
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }
 
-func handleAnnotate(_ context.Context, _ *mcp.CallToolRequest, in annotateInput) (*mcp.CallToolResult, any, error) {
+func handleAnnotate(ctx context.Context, _ *mcp.CallToolRequest, in annotateInput) (*mcp.CallToolResult, any, error) {
 	if in.Resource == "" || in.Name == "" {
-		return errResult("resource and name are required"), nil, nil
+		return mcputil.ErrResult("resource and name are required"), nil, nil
 	}
 	if in.Annotations == "" {
-		return errResult("annotations is required"), nil, nil
+		return mcputil.ErrResult("annotations is required"), nil, nil
 	}
 
 	args := []string{"annotate", in.Resource, in.Name}
@@ -260,5 +256,5 @@ func handleAnnotate(_ context.Context, _ *mcp.CallToolRequest, in annotateInput)
 	if in.Overwrite {
 		args = append(args, "--overwrite")
 	}
-	return kube(args...), nil, nil
+	return kube(ctx, args...), nil, nil
 }

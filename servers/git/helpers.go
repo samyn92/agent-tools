@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samyn92/agent-tools/servers/pkg/mcputil"
 )
 
 // gitBin is the resolved path to the git binary.
@@ -40,11 +41,6 @@ func resolveGit() string {
 	return "git"
 }
 
-// add registers a tool with the MCP server using typed input.
-func add[In any](s *mcp.Server, name, desc string, h mcp.ToolHandlerFor[In, any]) {
-	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc}, h)
-}
-
 // resolveCwd resolves a working directory relative to WORKSPACE.
 // Returns an error if the resolved path escapes the workspace sandbox.
 func resolveCwd(cwd string) (string, error) {
@@ -57,7 +53,6 @@ func resolveCwd(cwd string) (string, error) {
 	} else {
 		resolved = filepath.Clean(filepath.Join(workspace, cwd))
 	}
-	// Ensure the resolved path is within the workspace sandbox.
 	wsClean := filepath.Clean(workspace)
 	if resolved != wsClean && !strings.HasPrefix(resolved, wsClean+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %q escapes workspace sandbox %q", cwd, workspace)
@@ -66,63 +61,50 @@ func resolveCwd(cwd string) (string, error) {
 }
 
 // git runs a git command with the default timeout and returns an MCP result.
-func git(cwd string, args ...string) *mcp.CallToolResult {
-	return gitWithTimeout(defaultTimeout, cwd, args...)
+func git(ctx context.Context, cwd string, args ...string) *mcp.CallToolResult {
+	return gitWithTimeout(ctx, defaultTimeout, cwd, args...)
 }
 
 // gitNetwork runs a git command with the network timeout (for clone, push, pull).
-func gitNetwork(cwd string, args ...string) *mcp.CallToolResult {
-	return gitWithTimeout(networkTimeout, cwd, args...)
+func gitNetwork(ctx context.Context, cwd string, args ...string) *mcp.CallToolResult {
+	return gitWithTimeout(ctx, networkTimeout, cwd, args...)
 }
 
-// gitWithTimeout runs a git command with the given timeout.
-func gitWithTimeout(timeout time.Duration, cwd string, args ...string) *mcp.CallToolResult {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
+// gitWithTimeout runs a git command with the given timeout, traced via mcputil.
+func gitWithTimeout(ctx context.Context, timeout time.Duration, cwd string, args ...string) *mcp.CallToolResult {
 	dir, err := resolveCwd(cwd)
 	if err != nil {
-		return errResult("blocked: %s", err)
+		return mcputil.ErrResult("blocked: %s", err)
+	}
+
+	// Prepend -C <dir> so git runs in the correct directory.
+	fullArgs := args
+	if dir != "" {
+		fullArgs = append([]string{"-C", dir}, args...)
 	}
 
 	cmdLine := "$ git " + strings.Join(args, " ")
 
-	cmd := exec.CommandContext(ctx, gitBin, args...)
-	cmd.Dir = dir
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
+	r := mcputil.TracedExecWithTimeout(ctx, timeout, gitBin, fullArgs...)
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if r.TimedOut {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\ntimed out after %s\n%s", cmdLine, timeout, string(out))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\ntimed out after %s\n%s", cmdLine, timeout, r.Output)}},
 			IsError: true,
 		}
 	}
-	if err != nil {
+	if r.Err != nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\n%s\n%s", cmdLine, err, strings.TrimSpace(string(out)))}},
+			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s\n%s\n%s", cmdLine, r.Err, r.Output)}},
 			IsError: true,
 		}
 	}
-	text := strings.TrimSpace(string(out))
-	if text == "" {
-		text = "(no output)"
+	output := r.Output
+	if output == "" {
+		output = "(no output)"
 	}
 	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + text}},
-	}
-}
-
-// textResult creates a successful text result.
-func textResult(text string) *mcp.CallToolResult {
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
-}
-
-// errResult creates an error result with formatting.
-func errResult(format string, args ...any) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, args...)}},
-		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: cmdLine + "\n" + output}},
 	}
 }
 
