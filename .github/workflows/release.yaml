@@ -69,6 +69,7 @@ jobs:
     name: MCP server OCI artifacts
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         server:
           - kube-explore
@@ -141,6 +142,7 @@ jobs:
     name: MCP server container images
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         server:
           - git
