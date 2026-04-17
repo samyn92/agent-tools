@@ -77,6 +77,7 @@ jobs:
           - gitlab
           - kubectl
           - flux
+          - tempo
     steps:
       - uses: actions/checkout@v4
 
@@ -95,15 +96,9 @@ jobs:
         working-directory: servers/${{ matrix.server }}
         run: |
           mkdir -p dist/bin
-          # For servers that bundle a CLI binary alongside the MCP server,
-          # name the MCP binary with mcp- prefix to avoid collision.
-          case "${{ matrix.server }}" in
-            kubectl|flux) BIN_NAME="mcp-${{ matrix.server }}" ;;
-            *) BIN_NAME="${{ matrix.server }}" ;;
-          esac
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags="-s -w" \
-            -o "dist/bin/${BIN_NAME}" .
+            -o "dist/bin/mcp-${{ matrix.server }}" .
           cp manifest.json dist/
 
       - name: Bundle kubectl CLI binary
@@ -153,6 +148,7 @@ jobs:
           - gitlab
           - kubectl
           - kube-explore
+          - tempo
     steps:
       - uses: actions/checkout@v4
 
