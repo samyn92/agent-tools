@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	stdlog "log"
 	"strings"
 	"time"
 
@@ -50,7 +50,7 @@ func initClients() {
 		kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 		restConfig, err = kubeConfig.ClientConfig()
 		if err != nil {
-			log.Fatalf("Cannot create Kubernetes config: %v", err)
+			stdlog.Fatalf("Cannot create Kubernetes config: %v", err)
 		}
 	}
 
@@ -60,12 +60,12 @@ func initClients() {
 
 	clientset, err = kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		log.Fatalf("Cannot create Kubernetes clientset: %v", err)
+		stdlog.Fatalf("Cannot create Kubernetes clientset: %v", err)
 	}
 
 	dynClient, err = dynamic.NewForConfig(restConfig)
 	if err != nil {
-		log.Fatalf("Cannot create dynamic client: %v", err)
+		stdlog.Fatalf("Cannot create dynamic client: %v", err)
 	}
 
 	dc := clientset.Discovery()
