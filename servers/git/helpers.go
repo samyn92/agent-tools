@@ -42,7 +42,18 @@ func resolveGit() string {
 }
 
 // resolveCwd resolves a working directory relative to WORKSPACE.
-// Returns an error if the resolved path escapes the workspace sandbox.
+//
+// Behavior:
+//   - Empty cwd → workspace root (most common, recommended for agents).
+//   - Relative cwd → joined with workspace.
+//   - Absolute cwd inside workspace → used as-is.
+//   - Absolute cwd outside workspace → returns an actionable error that
+//     names the workspace and suggests how to recover. We deliberately do
+//     NOT silently rewrite, because the agent may be confused about which
+//     repo it's operating on; surfacing the mistake is safer than guessing.
+//
+// The error message is written for the agent (LLM) consumer, not the
+// human operator, so it explicitly tells the agent what to do next.
 func resolveCwd(cwd string) (string, error) {
 	if cwd == "" {
 		return workspace, nil
@@ -55,7 +66,13 @@ func resolveCwd(cwd string) (string, error) {
 	}
 	wsClean := filepath.Clean(workspace)
 	if resolved != wsClean && !strings.HasPrefix(resolved, wsClean+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes workspace sandbox %q", cwd, workspace)
+		return "", fmt.Errorf(
+			"cwd %q is outside the sandboxed git workspace %q. "+
+				"This MCP git tool can only operate inside %q. "+
+				"To fix: omit the cwd parameter (defaults to the workspace root), "+
+				"or pass a path under %q. The pre-cloned repository is typically at %q.",
+			cwd, wsClean, wsClean, wsClean, filepath.Join(wsClean, "repo"),
+		)
 	}
 	return resolved, nil
 }
