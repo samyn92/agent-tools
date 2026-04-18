@@ -1,0 +1,12 @@
+This is a simple test file for the agent-tools repository.
+
+Created on: 2026-04-18
+Purpose: Testing repository workflows and merge requests
+
+Content:
+- Line 1: Introduction
+- Line 2: Timestamp
+- Line 3: Purpose statement
+- Line 4: Content list
+
+This file was created as part of a test to verify the repository's CI/CD and merge request workflows.
