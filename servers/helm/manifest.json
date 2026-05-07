@@ -1,0 +1,6 @@
+{
+  "name": "helm",
+  "command": "mcp-helm",
+  "transport": "stdio",
+  "description": "Helm chart inspection and values diffing. Show chart metadata, default values, compare versions, and detect configuration drift."
+}

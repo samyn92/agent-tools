@@ -71,14 +71,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server:
-          - kube-explore
-          - git
-          - github
-          - gitlab
-          - kubectl
-          - flux
-          - tempo
+         server:
+           - kube-explore
+           - git
+           - github
+           - gitlab
+           - kubectl
+           - flux
+           - helm
+           - tempo
     steps:
       - uses: actions/checkout@v4
 
