@@ -30,6 +30,9 @@ var (
 	log      *slog.Logger
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-tempo")
 	defer func() { shutdown(context.Background()) }()
@@ -38,7 +41,7 @@ func main() {
 
 	tempoURL = strings.TrimRight(or(os.Getenv("TEMPO_URL"), "http://tempo.observability.svc.cluster.local:3200"), "/")
 
-	server := mcputil.NewServer("tempo-tools", "0.1.0")
+	server := mcputil.NewServer("tempo-tools", version)
 
 	mcputil.AddToolTo(server, "tempo_search",
 		"Search traces by agent name, time range, and status. Returns summarized trace metadata with durations, step counts, and token usage. Use this as the starting point to find traces worth investigating.",

@@ -37,6 +37,9 @@ var (
 	log     *slog.Logger
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-github")
 	defer func() { shutdown(context.Background()) }()
@@ -50,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := mcputil.NewServer("github-tools", "0.1.0")
+	server := mcputil.NewServer("github-tools", version)
 
 	mcputil.AddToolTo(server, "github_get_repo", "Get repository info (description, stars, language, default branch).", handleGetRepo)
 	mcputil.AddToolTo(server, "github_list_prs", "List pull requests for a repository.", handleListPRs)

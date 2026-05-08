@@ -26,6 +26,9 @@ import (
 
 var log *slog.Logger
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	// Helm needs writable dirs for cache/config/data. Agent pods run as
 	// nonroot with read-only rootfs, so point everything to /tmp.
@@ -42,7 +45,7 @@ func main() {
 
 	helmBin = resolveHelm()
 
-	server := mcputil.NewServer("helm", "0.1.0")
+	server := mcputil.NewServer("helm", version)
 
 	mcputil.AddToolTo(server, "helm_show_values", "Show default values.yaml for a chart at a given version from an OCI or repo source.", handleShowValues)
 	mcputil.AddToolTo(server, "helm_show_chart", "Show Chart.yaml metadata (version, appVersion, description, dependencies).", handleShowChart)

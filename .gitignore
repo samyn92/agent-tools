@@ -7,6 +7,12 @@
 *.so
 *.dylib
 
+# Bundled CLI binaries (downloaded at build time)
+servers/kubectl/kubectl
+servers/flux/flux
+servers/helm/helm
+servers/tempo/tempo
+
 # Test binary
 *.test
 

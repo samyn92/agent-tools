@@ -99,7 +99,7 @@ jobs:
         run: |
           mkdir -p dist/bin
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags="-s -w" \
+            -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
             -o "dist/bin/mcp-${{ matrix.server }}" .
           cp manifest.json dist/
 

@@ -26,6 +26,9 @@ import (
 
 var log *slog.Logger
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-kubectl")
 	defer func() { shutdown(context.Background()) }()
@@ -39,7 +42,7 @@ func main() {
 		mode = "readonly"
 	}
 
-	server := mcputil.NewServer("kubectl-"+mode, "0.1.0", mcputil.WithMode(mode))
+	server := mcputil.NewServer("kubectl-"+mode, version, mcputil.WithMode(mode))
 
 	// ── Readonly tools (always registered) ──
 	mcputil.AddToolTo(server, "kubectl_get", "Get one or many resources. Supports all resource types, label selectors, field selectors, and output formats.", handleGet)

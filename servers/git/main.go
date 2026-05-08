@@ -26,6 +26,9 @@ import (
 
 var log *slog.Logger
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-git")
 	defer func() { shutdown(context.Background()) }()
@@ -43,7 +46,7 @@ func main() {
 		mode = "readonly"
 	}
 
-	server := mcputil.NewServer("git-"+mode, "0.2.0", mcputil.WithMode(mode))
+	server := mcputil.NewServer("git-"+mode, version, mcputil.WithMode(mode))
 
 	// ── Readonly tools (always registered) ──
 	registerReadonlyTools(server)

@@ -26,6 +26,9 @@ import (
 
 var log *slog.Logger
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-flux")
 	defer func() { shutdown(context.Background()) }()
@@ -39,7 +42,7 @@ func main() {
 		mode = "readonly"
 	}
 
-	server := mcputil.NewServer("flux-"+mode, "0.1.0", mcputil.WithMode(mode))
+	server := mcputil.NewServer("flux-"+mode, version, mcputil.WithMode(mode))
 
 	// ── Readonly tools (always registered) ──
 	mcputil.AddToolTo(server, "flux_get", "Get Flux resources: all, helmreleases, kustomizations, sources (git/helm/oci/bucket/chart), alerts, receivers, images.", handleGet)

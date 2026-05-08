@@ -36,6 +36,9 @@ var (
 	log     *slog.Logger
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 func main() {
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-gitlab")
 	defer func() { shutdown(context.Background()) }()
@@ -50,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := mcputil.NewServer("gitlab-tools", "0.1.0")
+	server := mcputil.NewServer("gitlab-tools", version)
 
 	mcputil.AddToolTo(server, "gitlab_get_project", "Get GitLab project info (description, visibility, default branch).", handleGetProject)
 	mcputil.AddToolTo(server, "gitlab_list_mrs", "List merge requests for a project.", handleListMRs)
