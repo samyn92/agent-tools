@@ -61,6 +61,7 @@ func main() {
 	mcputil.AddToolTo(server, "gitlab_get_mr_diff", "Get the diff/changes of a merge request.", handleGetMRDiff)
 	mcputil.AddToolTo(server, "gitlab_create_mr", "Create a new merge request.", handleCreateMR, mcputil.WithInputOutput())
 	mcputil.AddToolTo(server, "gitlab_add_mr_note", "Add a comment (note) to a merge request.", handleAddMRNote, mcputil.WithInputOutput())
+	mcputil.AddToolTo(server, "gitlab_update_mr", "Update a merge request (title, description, labels, etc.).", handleUpdateMR, mcputil.WithInputOutput())
 	mcputil.AddToolTo(server, "gitlab_list_issues", "List issues for a project.", handleListIssues)
 	mcputil.AddToolTo(server, "gitlab_get_issue", "Get details of a specific issue.", handleGetIssue)
 	mcputil.AddToolTo(server, "gitlab_add_issue_note", "Add a comment (note) to an issue.", handleAddIssueNote, mcputil.WithInputOutput())
@@ -106,6 +107,14 @@ type mrNoteInput struct {
 	Project string `json:"project" jsonschema_description:"Project path or ID"`
 	IID     int    `json:"iid" jsonschema_description:"Merge request IID"`
 	Body    string `json:"body" jsonschema_description:"Note body (Markdown supported)"`
+}
+
+type updateMRInput struct {
+	Project     string `json:"project" jsonschema_description:"Project path or ID"`
+	IID         int    `json:"iid" jsonschema_description:"Merge request IID"`
+	Title       string `json:"title,omitempty" jsonschema_description:"New MR title"`
+	Description string `json:"description,omitempty" jsonschema_description:"New MR description (Markdown)"`
+	Labels      string `json:"labels,omitempty" jsonschema_description:"Comma-separated labels to set"`
 }
 
 type listIssuesInput struct {
@@ -166,6 +175,23 @@ func handleAddMRNote(ctx context.Context, _ *mcp.CallToolRequest, in mrNoteInput
 		map[string]any{"body": in.Body}), nil, nil
 }
 
+func handleUpdateMR(ctx context.Context, _ *mcp.CallToolRequest, in updateMRInput) (*mcp.CallToolResult, any, error) {
+	payload := make(map[string]any)
+	if in.Title != "" {
+		payload["title"] = in.Title
+	}
+	if in.Description != "" {
+		payload["description"] = in.Description
+	}
+	if in.Labels != "" {
+		payload["labels"] = in.Labels
+	}
+	if len(payload) == 0 {
+		return mcputil.ErrResult("at least one field (title, description, labels) is required"), nil, nil
+	}
+	return glPut(ctx, fmt.Sprintf("/projects/%s/merge_requests/%d", encode(in.Project), in.IID), payload), nil, nil
+}
+
 func handleListIssues(ctx context.Context, _ *mcp.CallToolRequest, in listIssuesInput) (*mcp.CallToolResult, any, error) {
 	state := or(in.State, "opened")
 	u := fmt.Sprintf("/projects/%s/issues?state=%s&per_page=30", encode(in.Project), state)
@@ -207,9 +233,17 @@ func glGet(ctx context.Context, pathFmt string, args ...any) *mcp.CallToolResult
 }
 
 func glPost(ctx context.Context, path string, payload map[string]any) *mcp.CallToolResult {
+	return glMutate(ctx, "POST", path, payload)
+}
+
+func glPut(ctx context.Context, path string, payload map[string]any) *mcp.CallToolResult {
+	return glMutate(ctx, "PUT", path, payload)
+}
+
+func glMutate(ctx context.Context, method, path string, payload map[string]any) *mcp.CallToolResult {
 	data, _ := json.Marshal(payload)
 	u := apiBase + path
-	body, status, err := mcputil.TracedHTTP(ctx, "POST", u,
+	body, status, err := mcputil.TracedHTTP(ctx, method, u,
 		mcputil.WithHeader("PRIVATE-TOKEN", token),
 		mcputil.WithHeader("Content-Type", "application/json"),
 		mcputil.WithBody(strings.NewReader(string(data))),
