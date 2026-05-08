@@ -27,6 +27,14 @@ import (
 var log *slog.Logger
 
 func main() {
+	// Helm needs writable dirs for cache/config/data. Agent pods run as
+	// nonroot with read-only rootfs, so point everything to /tmp.
+	for _, env := range []string{"HELM_CACHE_HOME", "HELM_CONFIG_HOME", "HELM_DATA_HOME"} {
+		if os.Getenv(env) == "" {
+			os.Setenv(env, "/tmp/helm")
+		}
+	}
+
 	shutdown, _ := mcputil.Init(context.Background(), "mcp-tool-helm")
 	defer func() { shutdown(context.Background()) }()
 
