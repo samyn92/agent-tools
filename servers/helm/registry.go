@@ -42,6 +42,10 @@ func loadRegistries() map[string]string {
 //
 //	→ "oci://harbor.das-schiff.telekom.de/mavenir/t5g-smf"
 func resolveChartURL(sourceRef, chartName string) (string, error) {
+	// Strip common prefixes the agent might incorrectly add
+	sourceRef = strings.TrimPrefix(sourceRef, "oci://")
+	sourceRef = strings.TrimPrefix(sourceRef, "https://")
+
 	regs := loadRegistries()
 	baseURL, ok := regs[sourceRef]
 	if !ok {
