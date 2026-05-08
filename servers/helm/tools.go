@@ -14,17 +14,17 @@ import (
 // ── Input types ──
 
 type showValuesInput struct {
-	Chart   string `json:"chart" jsonschema_description:"Chart reference (e.g. oci://registry/org/chart or repo/chart)"`
+	Chart   string `json:"chart" jsonschema_description:"OCI chart URL — must come from system prompt registry mapping, never guess"`
 	Version string `json:"version,omitempty" jsonschema_description:"Chart version (required for OCI charts)"`
 }
 
 type showChartInput struct {
-	Chart   string `json:"chart" jsonschema_description:"Chart reference (e.g. oci://registry/org/chart or repo/chart)"`
+	Chart   string `json:"chart" jsonschema_description:"OCI chart URL — must come from system prompt registry mapping, never guess"`
 	Version string `json:"version,omitempty" jsonschema_description:"Chart version"`
 }
 
 type valuesDiffInput struct {
-	Chart      string `json:"chart" jsonschema_description:"Chart reference (e.g. oci://harbor.example.com/org/mychart)"`
+	Chart      string `json:"chart" jsonschema_description:"OCI chart URL — must come from system prompt registry mapping, never guess"`
 	OldVersion string `json:"oldVersion" jsonschema_description:"Old chart version to compare from"`
 	NewVersion string `json:"newVersion" jsonschema_description:"New chart version to compare to"`
 }
@@ -38,7 +38,7 @@ type getValuesInput struct {
 type driftInput struct {
 	Release   string `json:"release" jsonschema_description:"Helm release name"`
 	Namespace string `json:"namespace,omitempty" jsonschema_description:"Namespace of the release"`
-	Chart     string `json:"chart,omitempty" jsonschema_description:"Chart reference (auto-detected from release if omitted)"`
+	Chart     string `json:"chart,omitempty" jsonschema_description:"OCI chart URL — must come from system prompt registry mapping, never guess"`
 	Version   string `json:"version,omitempty" jsonschema_description:"Chart version (auto-detected from release if omitted)"`
 }
 
