@@ -32,3 +32,6 @@ go.work.sum
 # OS
 .DS_Store
 Thumbs.db
+servers/flux/flux
+servers/kubectl/kubectl
+servers/tempo/tempo
