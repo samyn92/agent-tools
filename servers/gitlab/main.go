@@ -1,6 +1,13 @@
 /*
 MCP Tool: GitLab
 
+DEPRECATED: This OCI-packaged GitLab MCP server is superseded by the runtime's
+native gitlab_* tools (agentops-runtime gitlab/ package, official GitLab Go SDK).
+Native tools are auto-enabled from a bound gitlab-group/gitlab-project Integration
+(GITLAB_TOKEN) and enforce read-only mode + a project allow-list. This server is
+retained only for non-AgentOps / standalone MCP clients and will not receive new
+features. Do not bind it to Agents via AgentTool — use a GitLab Integration.
+
 An MCP stdio server providing GitLab API operations.
 Uses net/http directly — no external dependencies beyond the MCP SDK.
 Self-contained binary, no glab CLI needed.

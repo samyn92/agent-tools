@@ -114,7 +114,7 @@ All servers are compiled Go binaries named `mcp-{server}` implementing the MCP s
 | `flux` | `mcp-flux` | 15 (11 readonly + 4 readwrite) | `MODE=readonly` (default) or `readwrite` |
 | `git` | `mcp-git` | 12 (5 readonly + 7 readwrite) | `MODE=readwrite` (default) |
 | `github` | `mcp-github` | 12 | `GITHUB_TOKEN` required |
-| `gitlab` | `mcp-gitlab` | 10 | `GITLAB_TOKEN` + `GITLAB_URL` required |
+| `gitlab` | `mcp-gitlab` | 10 | `GITLAB_TOKEN` + `GITLAB_URL` required — **deprecated** (use a GitLab Integration) |
 | `tempo` | `mcp-tempo` | 6 | `TEMPO_URL` required |
 
 ### Tool Reference
@@ -170,6 +170,11 @@ Git operations MCP server. Default mode is `readwrite` (most agents need to comm
 GitHub API MCP server. Requires `GITHUB_TOKEN` (or `GH_TOKEN`) environment variable. All operations are API-based (no CLI dependency).
 
 ### gitlab
+
+> **Deprecated.** Superseded by the agentops-runtime native `gitlab_*` tools
+> (official GitLab Go SDK), auto-enabled from a bound `gitlab-group` /
+> `gitlab-project` Integration with read-only mode + project allow-list. Prefer a
+> GitLab Integration over binding this AgentTool. Retained for standalone MCP clients.
 
 GitLab API MCP server. Requires `GITLAB_TOKEN` and `GITLAB_URL` environment variables. All operations are API-based (no CLI dependency).
 

@@ -2,5 +2,5 @@
   "name": "gitlab",
   "command": "mcp-gitlab",
   "transport": "stdio",
-  "description": "GitLab API operations (MRs, issues, pipelines, projects)"
+  "description": "[DEPRECATED — use a GitLab Integration; superseded by runtime-native gitlab_* tools] GitLab API operations (MRs, issues, pipelines, projects)"
 }
